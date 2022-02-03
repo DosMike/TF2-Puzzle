@@ -3,10 +3,16 @@
 I want to make puzzle/coop maps for TF2 similar to HL2DM Puzzle servers.
 This requires a gravity gun in most cases to move around props, so this is the main aspect.
 
-Players can use /hands or /holster to put away their weapons. 
+## Gravity Hands
+
+Players can use `/hands` or `/holster` to put away their weapons. 
 This equips players with non-damaging fists (breaking heavys stock fists in the process but whatever).
 Physics props below a mass of 250 can be moved around with right click and can be punted away.
 It tries to fire apropriate physgun related outputs and to honor frozen and motion disabled props.
+
+Left-clicking while holding a prop will punt it, otherwise left-click is just a normal melee punch.
+
+## Custom map logic
 
 The second big part is custom map logic for puzzle maps (with `_puzzle_` in their name). This is required
 because sometimes you want the player in a certain state and the builtins don't quite do it.
@@ -16,7 +22,7 @@ in developer mode, because those are not real outputs, but the plugin will under
 is that sourcemod can not handle more than 2MB of map logic to pre-parse, or it will fail to load/crash(?).
 To help you keep track of this bsp lump, the plugin will print the lump size before map start.
 
-But what can you do with these new outputs?
+Note on weapon stripping: The plugin always tries to give at least the gravity hands to prevent T-posing.
 
 ### `!activator,TF2Puzzle,Strip`
 Take all weapons from the player
