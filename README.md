@@ -3,6 +3,10 @@
 I want to make puzzle/coop maps for TF2 similar to HL2DM Puzzle servers.
 This requires a gravity gun in most cases to move around props, so this is the main aspect.
 
+Clarification: The goal of this plugin is NOT to make old puzzle maps compatible with TF2!
+This plugin only serves as a utility to allow puzzle style maps to be created.
+( Or for a cheap GravGun if you're after that :D )
+
 ## Gravity Hands
 
 Players can use `/hands` or `/holster` to put away their weapons. 
