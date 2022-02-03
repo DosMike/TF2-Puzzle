@@ -7,6 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <regex>
 
 #include <smlib>
 #include "morecolors.inc"
@@ -19,16 +20,21 @@
 #include <tf2attributes>
 #include <tf_econ_data>
 
+#undef REQUIRE_PLUGIN
+#tryinclude <vehicles>
+#define REQUIRE_PLUGIN
+
 #pragma newdecls required
 #pragma semicolon 1
+#pragma dynamic 0x200000
 
-#define PLUGIN_VERSION
+#define PLUGIN_VERSION "22w04b"
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
 	author = "reBane",
 	description = "Utility to make puzzle maps work",
-	version = "22w04a",
+	version = PLUGIN_VERSION,
 	url = "N/A"
 }
 
@@ -70,10 +76,12 @@ enum struct PlayerData {
 	}
 }
 PlayerData player[MAXPLAYERS+1];
+bool depVehicles;
 
 //global structures and data defined, include submodules
 #include "tf2puzzle_weapons.sp"
 #include "tf2puzzle_gravihands.sp"
+#include "tf2puzzle_mapsupport.sp"
 
 public void OnPluginStart() {
 	
@@ -81,7 +89,11 @@ public void OnPluginStart() {
 	RegConsoleCmd("sm_holster", Command_Holster, "Put away weapons");
 	
 	HookEvent("player_death", OnClientDeathPost);
+	HookEvent("teamplay_round_start", OnMapEntitiesRefreshed);
+	HookEvent("teamplay_restart_round", OnMapEntitiesRefreshed);
 //	HookEvent("post_inventory_application", OnClientInventoryRegeneratePost);
+	
+	InitOutputCache();
 	
 	for (int client=1; client<=MaxClients; client++) {
 		if (!IsValidClient(client)) continue;
@@ -90,17 +102,33 @@ public void OnPluginStart() {
 	}
 }
 
+public void OnAllPluginsLoaded() {
+	depVehicles = LibraryExists("vehicles");
+}
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "vehicles")) depVehicles = true;
+}
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "vehicles")) depVehicles = false;
+}
+
+public Action OnLevelInit(const char[] mapName, char mapEntities[2097152]) {
+	bPuzzleMap = (StrContains(mapName, "puzzle_")>=0);
+	return (bPuzzleMap && ScanOutputs(mapEntities)) ? Plugin_Changed : Plugin_Continue;
+}
+
+
 public void OnMapStart() {
-	char mapname[128];
-	GetCurrentMap(mapname, sizeof(mapname));
-	bPuzzleMap = (StrContains(mapname, "_puzzle_")>=0);
-	
 	PrecacheModel(DUMMY_MODEL);
 	PrecacheSound(GH_SOUND_PICKUP);
 	PrecacheSound(GH_SOUND_DROP);
 	PrecacheSound(GH_SOUND_INVALID);
 	PrecacheSound(GH_SOUND_TOOHEAVY);
 	PrecacheSound(GH_SOUND_THROW);
+}
+
+public void OnMapEntitiesRefreshed(Event event, const char[] name, bool dontBroadcast) {
+	AttachOutputHooks();
 }
 
 public void OnClientConnected(int client) {
@@ -110,6 +138,8 @@ public void OnClientConnected(int client) {
 
 public void OnClientDisconnect(int client) {
 	ForceDropItem(client);
+	player[client].Reset();
+	GravHand[client].Reset();
 }
 
 public void OnEntityCreated(int entity, const char[] classname) {
@@ -146,7 +176,7 @@ public Action OnClientWeaponEquip(int client, int weapon) {
 //}
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2]) {
-	if (clientCmdHoldProp(client, buttons, angles)) {
+	if (clientCmdHoldProp(client, buttons, vel, angles)) {
 		buttons &=~ IN_ATTACK2;
 		return Plugin_Changed;
 	}
