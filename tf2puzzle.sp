@@ -102,7 +102,6 @@ public void OnPluginStart() {
 	HookEvent("player_death", OnClientDeathPost);
 	HookEvent("teamplay_round_start", OnMapEntitiesRefreshed);
 	HookEvent("teamplay_restart_round", OnMapEntitiesRefreshed);
-//	HookEvent("post_inventory_application", OnClientInventoryRegeneratePost);
 	
 	InitOutputCache();
 	
@@ -158,6 +157,14 @@ public void OnMapStart() {
 public void OnMapEntitiesRefreshed(Event event, const char[] name, bool dontBroadcast) {
 	AttachOutputHooks();
 }
+
+public void OnPluginEnd() {
+	for (int i=1;i<=MaxClients;i++) {
+		ForceDropItem(client);
+		DropHolsteredMelee(client);
+	}
+}
+
 
 public void OnClientConnected(int client) {
 	player[client].Reset();
@@ -252,11 +259,5 @@ public Action Command_Holster(int client, int args) {
 	if (!IsValidClient(client,false)) return Plugin_Handled;
 	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
 	else HolsterMelee(client);
-	return Plugin_Handled;
-}
-
-public Action Command_Test(int client, int args) {
-	if (!IsValidClient(client,false)) return Plugin_Handled;
-	TF2_RegeneratePlayer(client);
 	return Plugin_Handled;
 }

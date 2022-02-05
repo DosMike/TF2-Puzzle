@@ -314,6 +314,7 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		}
 		if (!IsNullVector(dvelocity)) AddVectors(vec, dvelocity, vec);
 		TeleportEntity(entity, origin, NULL_VECTOR, vec);
+		
 		//fire output that the ent was dropped
 		FireEntityOutput(entity, punt?"OnPhysGunPunt":"OnPhysGunDrop", client);
 		//reset ref because we're nice
