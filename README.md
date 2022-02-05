@@ -54,3 +54,13 @@ that vehicle plugin contains a section with the specified name, it will try to s
 target. I recommend using an `OnUserX` output for a `info_target`. Note that vehicles might be rotated by
 90 deg. If you need them spawned without interaction, use a `logic_auto`s `OnMapStart`. The default
 vehicles available are `hl2_jeep` and `hl2_airboat`.
+
+## Dependencies
+
+* [VPhysics](https://forums.alliedmods.net/showthread.php?t=136350?t=136350)
+* [TF2Items](https://forums.alliedmods.net/showthread.php?p=1050170?p=1050170)
+* [TF2 Attributes](https://github.com/nosoop/tf2attributes)
+* One of the following Item Plugins:
+  * [TF Econ Data](https://github.com/nosoop/SM-TFEconData) (Not YET recommended, compat layer is a bit broken as of writing)
+  * [TF2 ItemDB](https://forums.alliedmods.net/showthread.php?t=255885)
+* [Source Vehicles](https://github.com/Mikusch/source-vehicles) (Optional)

@@ -3,32 +3,40 @@
 #endif
 #define _tf2puzzle
 
+//generic includes
 #include <clients>
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
 #include <regex>
 
+//generic dependencies
 #include <smlib>
 #include "morecolors.inc"
 #include <vphysics>
 
+//game specific includes
 #include <tf2>
 #include <tf2_stocks>
-#include <tf2items>
-#include <tf2utils>
-#include <tf2attributes>
-#include <tf_econ_data>
 
+//game specific dependencies
+#include <tf2items>
+#include <tf2attributes>
+
+//game specific dependencies (optional)
 #undef REQUIRE_PLUGIN
-#tryinclude <vehicles>
+#include <vehicles>
+// we primarily compile with tf2 econ data, but can optionally fall back to tf2idb
+#include <tf_econ_data>
+#tryinclude <tf2idb>
 #define REQUIRE_PLUGIN
 
 #pragma newdecls required
 #pragma semicolon 1
+//we require more heap in order to be able to parse the bsp lump. value is not yet optimized
 #pragma dynamic 0x200000
 
-#define PLUGIN_VERSION "22w04b"
+#define PLUGIN_VERSION "22w05a"
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
@@ -77,8 +85,11 @@ enum struct PlayerData {
 }
 PlayerData player[MAXPLAYERS+1];
 bool depVehicles;
+bool depTFEconData;
+bool depTF2IDB;
 
 //global structures and data defined, include submodules
+#include "tf2puzzle_econwrapper.sp"
 #include "tf2puzzle_weapons.sp"
 #include "tf2puzzle_gravihands.sp"
 #include "tf2puzzle_mapsupport.sp"
@@ -104,12 +115,29 @@ public void OnPluginStart() {
 
 public void OnAllPluginsLoaded() {
 	depVehicles = LibraryExists("vehicles");
+	depTFEconData = LibraryExists("tf_econ_data");
+	depTF2IDB = LibraryExists("tf2idb");
+	if (!depTFEconData && !depTF2IDB) {
+		PrintToServer("[TF2Puzzle] No supported item plugin was detected after all plugins loaded! This plugin will akt broken!");
+	}
 }
 public void OnLibraryAdded(const char[] name) {
+	bool econ, hadEcon = depTFEconData||depTF2IDB;
 	if (StrEqual(name, "vehicles")) depVehicles = true;
+	else if (StrEqual(name, "tf_econ_data")) { econ = true; depTFEconData = true; }
+	else if (StrEqual(name, "tf2idb")) { econ = true; depTF2IDB = true; }
+	if (econ && !hadEcon) {
+		PrintToServer("[TF2Puzzle] Item plugin was detected again!");
+	}
 }
 public void OnLibraryRemoved(const char[] name) {
+	bool econ;
 	if (StrEqual(name, "vehicles")) depVehicles = false;
+	else if (StrEqual(name, "tf_econ_data")) { econ = true; depTFEconData = false; }
+	else if (StrEqual(name, "tf2idb")) { econ = true; depTF2IDB = false; }
+	if (econ && !depTFEconData && !depTF2IDB) {
+		PrintToServer("[TF2Puzzle] All supported item plugins were unloaded! This plugin will akt broken!");
+	}
 }
 
 public Action OnLevelInit(const char[] mapName, char mapEntities[2097152]) {
@@ -162,18 +190,15 @@ public void OnPlayerSpawnPost(int client) {
 
 public Action OnClientWeaponEquip(int client, int weapon) {
 	if (!IsValidClient(client,false) || weapon == INVALID_ENT_REFERENCE) return Plugin_Continue;
-	int slot = TF2Util_GetWeaponSlot(weapon);
+	// THIS WOULD WORK BETTER WITH NOSOOPS TF2UTILS BUT I DON'T WANT TO INTRODUCE
+	// ANOTHER DEPENDENCY. IF YOU THING IT'S WORTH IT, JUST INCLUDE THE PLUGIN AND 
+	// SWAP COMMENTS FOR THE NEXT TWO LINES 
+	//int slot = TF2Util_GetWeaponSlot(weapon);
+	int slot = TF2EI_GetDefaultWeaponSlot(GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex"));
 	if (slot == TFWeaponSlot_Melee && player[client].holsteredWeapon != INVALID_ITEM_DEFINITION)
 		DropHolsteredMelee(client); //melee was replaced
 	return Plugin_Continue;
 }
-
-//public void OnClientInventoryRegeneratePost(Event event, const char[] name, bool dontBroadcast) {
-//	// for some reason the event gets called a lot on initial join
-//	int client = GetClientOfUserId(event.GetInt("userid", 0));
-//	if (!IsValidClient(client,false) || TF2_GetClientTeam(client)<=TFTeam_Spectator || !IsPlayerAlive(client)) return;
-//	
-//}
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2]) {
 	if (clientCmdHoldProp(client, buttons, vel, angles)) {

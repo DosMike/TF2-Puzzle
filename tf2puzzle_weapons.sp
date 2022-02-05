@@ -8,19 +8,25 @@
 #endif
 
 int EquipPlayerMelee(int client, int definitionIndex) {
-	if (!TF2Econ_IsValidItemDefinition(definitionIndex))
+	if (!TF2EI_IsValidItemDefinition(definitionIndex))
 		ThrowError("Definition index %d is invalid", definitionIndex);
-	Handle weapon = TF2Items_CreateItem(FORCE_GENERATION|PRESERVE_ATTRIBUTES);
+	
 	char class[72];
 	int minlvl, maxlvl, quality;
-	TF2Econ_GetItemClassName(definitionIndex, class, sizeof(class));
-	TF2Econ_GetItemLevelRange(definitionIndex, minlvl, maxlvl);
-	quality = TF2Econ_GetItemQuality(definitionIndex);
-	if (StrEqual(class, "saxxy") && !TF2Econ_TranslateWeaponEntForClass(class, sizeof(class), TF2_GetPlayerClass(client)))
+	
+	if (TF2EI_GetDefaultWeaponSlot(definitionIndex)!=TFWeaponSlot_Melee)
+		ThrowError("Weapon %d (%s) uses non-melee slot!", definitionIndex, class);
+	
+	TF2EI_GetItemClassName(definitionIndex, class, sizeof(class));
+	TF2EI_GetItemLevelRange(definitionIndex, minlvl, maxlvl);
+	quality = TF2EI_GetItemQuality(definitionIndex);
+	
+	if (StrEqual(class, "saxxy") && !TF2EI_AdjustWeaponClassname(class, sizeof(class), TF2_GetPlayerClass(client)))
 		ThrowError("Could not translate saxxy (%d) for player class %d", definitionIndex, TF2_GetPlayerClass(client));
 	if (StrContains(class, "tf_weapon_")!=0 && !StrEqual(class, "saxxy"))
 		ThrowError("Definition index %d (%s) is not a weapon", definitionIndex, class);
 	
+	Handle weapon = TF2Items_CreateItem(FORCE_GENERATION|PRESERVE_ATTRIBUTES);
 	TF2Items_SetLevel(weapon, minlvl);
 	TF2Items_SetQuality(weapon, quality);
 	TF2Items_SetNumAttributes(weapon, 0);
@@ -31,10 +37,6 @@ int EquipPlayerMelee(int client, int definitionIndex) {
 	delete weapon;
 	TF2_RemoveWeaponSlot(client, TFWeaponSlot_Melee);
 	if (entity != INVALID_ENT_REFERENCE) {
-		if (TF2Util_GetWeaponSlot(entity)!=TFWeaponSlot_Melee) {
-			AcceptEntityInput(entity, "Kill");
-			ThrowError("Weapon %d (%s) uses non-melee slot!", definitionIndex, class);
-		}
 		SetEntProp(entity, Prop_Send, "m_bValidatedAttachedEntity", 1);
 		SetEntProp(entity, Prop_Send, "m_iAccountID", GetSteamAccountID(client));
 		EquipPlayerWeapon(client, entity);
