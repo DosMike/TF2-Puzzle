@@ -232,6 +232,8 @@ static bool TryPickupCursorEnt(int client, float yawAngle[3]) {
 			}
 			if ((spawnFlags & SF_PHYSBOX_NEVER_PUNT)!=0) pickupFlags |= PickupFlag_BlockPunting;
 		}
+	} else if (StrEqual(classname, "tf_dropped_weapon") || StrEqual(classname, "tf_ammo_pack")) {
+		pickupFlags = 0;
 	} else { //not an entity we could pick up
 		PlayActionSound(client,GH_ACTION_INVALID);
 		return false;
@@ -293,7 +295,8 @@ static bool TryPullCursorEnt(int client, float yawAngle[3]) {
 	int entity = pew(client, target, gGraviHandsPullDistance);
 	if (entity == INVALID_ENT_REFERENCE) return false;
 	Entity_GetClassName(entity, classname, sizeof(classname));
-	if (StrContains(classname,"prop_physics")!=0 && !StrEqual(classname, "func_physbox")) return false;
+	if (StrContains(classname,"prop_physics")!=0 && !StrEqual(classname, "func_physbox")
+		&& !StrEqual(classname, "tf_dropped_weapon") && !StrEqual(classname, "tf_ammo_pack")) return false;
 	
 	GetAngleVectors(yawAngle, force, NULL_VECTOR, NULL_VECTOR);
 	GetClientEyePosition(client, eyePos);
