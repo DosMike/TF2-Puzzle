@@ -55,6 +55,13 @@ target. I recommend using an `OnUserX` output for a `info_target`. Note that veh
 90 deg. If you need them spawned without interaction, use a `logic_auto`s `OnMapStart`. The default
 vehicles available are `hl2_jeep` and `hl2_airboat`.
 
+## Natives and Forwards
+
+Plugin developers get rich access to the GraviHand feature, being allowed to check when melee weapons are 
+(un)holstered as well as limited control over what physics entities can be picked up.
+
+Check the [include file](https://github.com/DosMike/TF2-Puzzle/blob/master/tf2puzzle.inc) for more info.
+
 ## Dependencies
 
 * [VPhysics](https://forums.alliedmods.net/showthread.php?t=136350?t=136350)
