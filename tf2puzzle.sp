@@ -288,7 +288,8 @@ public Action Command_Holster(int client, int args) {
 /** convar **/
 
 void CreateConvars() {
-	delete CreateConVar("tf2puzzle_version", PLUGIN_VERSION, "TF2 Puzzle Version", FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	ConVar version = CreateConVar("tf2puzzle_version", PLUGIN_VERSION, "TF2 Puzzle Version", FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	version.AddChangeHook(OnCVarLockedChange);
 	
 	cvarGraviHandsMaxWeight = CreateConVar("tf2puzzle_gravihands_maxmass", "250.0", _, _, true, 0.0);
 	cvarGraviHandsMaxWeight.AddChangeHook(OnCVarGraviHandsMaxWeightChange);
@@ -320,6 +321,11 @@ void CreateConvars() {
 	OnCVarGraviHandsPullDistanceChange(cvarGraviHandsPullDistance, "", "");
 	OnCVarGraviHandsPullForceFarChange(cvarGraviHandsPullForceFar, "", "");
 	OnCVarGraviHandsPullForceNearChange(cvarGraviHandsPullForceNear, "", "");
+}
+public void OnCVarLockedChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	char dbuf[32];
+	ConVar.GetDefault(dbuf, sizeof(dbuf));
+	if (!StrEqual(dbuf,newValue)) convar.RestoreDefault();
 }
 public void OnCVarGraviHandsMaxWeightChange(ConVar convar, const char[] oldValue, const char[] newValue) {
 	gGraviHandsMaxWeight = convar.FloatValue;
