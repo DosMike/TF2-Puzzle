@@ -49,6 +49,7 @@ bool HolsterMelee(int client) {
 		return false; //not for bots
 	if (player[client].holsteredWeapon != INVALID_ITEM_DEFINITION) 
 		return false; //already holstered
+	
 	int active = Client_GetActiveWeapon(client);
 	int melee = GetPlayerWeaponSlot(client, TFWeaponSlot_Melee);
 	bool switchTo = (melee == INVALID_ENT_REFERENCE || active != melee); //if melee was not active switch, to holster guns
@@ -56,10 +57,14 @@ bool HolsterMelee(int client) {
 		? INVALID_ITEM_DEFINITION
 		: GetEntProp(melee, Prop_Send, "m_iItemDefinitionIndex");
 	if (holsterIndex == 5) return false; //this is heavy with stock fists, can't holster
+	if (!NotifyWeaponHolster(client, holsterIndex)) return false; //was cancelled
+	
 	int fists = EquipPlayerMelee(client, 5);
 	if (switchTo) Client_SetActiveWeapon(client, fists);
 	if (holsterIndex != INVALID_ITEM_DEFINITION)
 		player[client].holsteredWeapon = holsterIndex;
+		
+	NotifyWeaponHolsterPost(client, holsterIndex);
 	return true;
 }
 
@@ -74,12 +79,19 @@ void ActualUnholsterMelee(int client) {
 		return; //not for bots
 	if (player[client].holsteredWeapon == INVALID_ITEM_DEFINITION)
 		return; //no weapon holstered
+	if (!NotifyWeaponUnholster(client, player[client].holsteredWeapon))
+		return; //was cancelled
 	int restore = player[client].holsteredWeapon;
 	player[client].holsteredWeapon = INVALID_ITEM_DEFINITION;
 	if (restore != INVALID_ITEM_DEFINITION)
 		EquipPlayerMelee(client, restore);
+	NotifyWeaponUnholsterPost(client, restore, false);
 }
 
 void DropHolsteredMelee(int client) {
+	if (player[client].holsteredWeapon == INVALID_ITEM_DEFINITION)
+		return;
+	int restore = player[client].holsteredWeapon;
 	player[client].holsteredWeapon = INVALID_ITEM_DEFINITION;
+	NotifyWeaponUnholsterPost(client, restore, true);
 }

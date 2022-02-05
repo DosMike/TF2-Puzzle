@@ -9,7 +9,6 @@
 
 #define DUMMY_MODEL "models/class_menu/random_class_icon.mdl"
 #define GRAB_DISTANCE 150.0
-#define DROP_DISTANCE 200.0
 
 #define GH_SOUND_PICKUP "weapons/physcannon/physcannon_pickup.wav"
 #define GH_SOUND_DROP "weapons/physcannon/physcannon_drop.wav"
@@ -35,6 +34,8 @@ enum struct GraviPropData {
 	float playNextAction;
 	int lastAudibleAction;
 	float nextPickup;
+	int lastInteractedEnt;
+	float lastInteractedTime;
 	
 	void Reset() {
 		this.rotProxyEnt = INVALID_ENT_REFERENCE;
@@ -91,32 +92,29 @@ static void computeBounds(float mins[3], float maxs[3]) {
  * @param targetPoint as ray end or max distance in look direction
  * @return entity under cursor if any
  */
-static int pew(int client, float targetPoint[3]) {
-	float eyePos[3], eyeAngles[3];
+static int pew(int client, float targetPoint[3], float scanDistance) {
+	float eyePos[3], eyeAngles[3], fwrd[3];
 	GetClientEyePosition(client, eyePos);
 	GetClientEyeAngles(client, eyeAngles);
+//	GetAngleVectors(eyeAngles, fwrd, NULL_VECTOR, NULL_VECTOR);
 	Handle trace = TR_TraceRayFilterEx(eyePos, eyeAngles, MASK_SOLID, RayType_Infinite, grabFilter, client);
 	int cursor = INVALID_ENT_REFERENCE;
 	if(TR_DidHit(trace)) {
 		float vecTarget[3];
 		TR_GetEndPosition(vecTarget, trace);
 		
-		float maxdistance = (EntRefToEntIndex(GravHand[client].grabbedEnt)==INVALID_ENT_REFERENCE) ? GRAB_DISTANCE : GravHand[client].grabDistance;
+		float maxdistance = (EntRefToEntIndex(GravHand[client].grabbedEnt)==INVALID_ENT_REFERENCE) ? scanDistance : GravHand[client].grabDistance;
 		float distance = GetVectorDistance(eyePos, vecTarget);
-		if(distance > maxdistance) {
-			float fwrd[3];
+		if(distance > maxdistance) { //looking beyond the held entity
 			GetAngleVectors(eyeAngles, fwrd, NULL_VECTOR, NULL_VECTOR);
-			NormalizeVector(fwrd, fwrd);
 			ScaleVector(fwrd, maxdistance);
 			AddVectors(eyePos, fwrd, targetPoint);
-		} else {
+		} else { //maybe looking at a wall
 			targetPoint = vecTarget;
 		}
 		
 		int entity = TR_GetEntityIndex(trace);
-		if (entity>0 && distance <= GRAB_DISTANCE) {
-			char cn[64];
-			GetEntityClassname(entity, cn, sizeof(cn));
+		if (entity>0 && distance <= scanDistance) {
 			cursor = entity;
 		}
 	}
@@ -162,20 +160,31 @@ bool clientCmdHoldProp(int client, int &buttons, float velocity[3], float angles
 		int grabbed = EntRefToEntIndex(GravHand[client].grabbedEnt);
 		//grabbing
 		if (grabbed == INVALID_ENT_REFERENCE) { //try to pick up cursorEnt
-			return TryPickupCursorEnt(client, angles);
+			if (gGraviHandsGrabDistance>0.0 && TryPickupCursorEnt(client, angles)) {
+			} else if (gGraviHandsPullDistance>0.0 && TryPullCursorEnt(client, angles)) {
+			} else {
+				//if another sound already played, nothing will happen
+				PlayActionSound(client, GH_ACTION_INVALID);
+				return false;
+			}
+		} else {
+			ThinkHeldProp(client, grabbed, buttons, angles);
 		}
-		ThinkHeldProp(client, grabbed, buttons, angles);
 		return true;
 	} else { //drop anything held
 		return ForceDropItem(client, buttons & IN_ATTACK && GravHand[client].forceDropProp, velocity, angles);
 	}
 }
 
+#define PickupFlag_MotionDisabled 0x01
+#define PickupFlag_SpawnFlags 0x02
+#define PickupFlag_TooHeavy 0x04
+#define PickupFlag_BlockPunting 0x100
+#define PickupFlag_EnableMotion 0x200
 static bool TryPickupCursorEnt(int client, float yawAngle[3]) {
 	float endpos[3], killVelocity[3];
-	int cursorEnt = pew(client, endpos);
+	int cursorEnt = pew(client, endpos, gGraviHandsGrabDistance);
 	if (cursorEnt == INVALID_ENT_REFERENCE) {
-		PlayActionSound(client,GH_ACTION_INVALID);
 		return false;
 	}
 	int rotProxy = getOrCreateProxyEnt(client, endpos);
@@ -183,61 +192,64 @@ static bool TryPickupCursorEnt(int client, float yawAngle[3]) {
 	//check if cursor is a entity we can grab
 	char classname[20];
 	GetEntityClassname(cursorEnt, classname, sizeof(classname));
+	int pickupFlags = 0;
 	if (StrContains(classname, "prop_physics")==0) {
 		if (Entity_GetFlags(cursorEnt) & FL_FROZEN) {
-			PlayActionSound(client,GH_ACTION_INVALID);
-			return false;
-		}
-		int spawnFlags = Entity_GetSpawnFlags(cursorEnt);
-		bool motion = Phys_IsMotionEnabled(cursorEnt);
-		if ((spawnFlags & SF_PHYSPROP_ENABLE_ON_PHYSCANNON) && !motion) {
-			Phys_EnableMotion(cursorEnt, true);
-			motion = true;
-		}
-		if (!(spawnFlags & SF_PHYSPROP_ALWAYS_PICK_UP)) {
-			if (spawnFlags & SF_PHYSPROP_PREVENT_PICKUP) {
-				PlayActionSound(client,GH_ACTION_INVALID);
-				return false;
+			pickupFlags |= PickupFlag_MotionDisabled;
+		} else {
+			int spawnFlags = Entity_GetSpawnFlags(cursorEnt);
+			bool motion = Phys_IsMotionEnabled(cursorEnt);
+			if ((spawnFlags & SF_PHYSPROP_ENABLE_ON_PHYSCANNON) && !motion) {
+				pickupFlags |= PickupFlag_EnableMotion;
+				motion = true;
 			}
-			if (GetEntityMoveType(cursorEnt)==MOVETYPE_NONE || !motion) {
-				PlayActionSound(client,GH_ACTION_INVALID);
-				return false;
-			}
-			if (Phys_GetMass(cursorEnt)>250.0) {
-				PlayActionSound(client,GH_ACTION_TOOHEAVY);
-				return false;
+			if (!(spawnFlags & SF_PHYSPROP_ALWAYS_PICK_UP)) {
+				if (spawnFlags & SF_PHYSPROP_PREVENT_PICKUP)
+					pickupFlags |= PickupFlag_SpawnFlags;
+				if (GetEntityMoveType(cursorEnt)==MOVETYPE_NONE || !motion)
+					pickupFlags |= PickupFlag_MotionDisabled;
+				if (Phys_GetMass(cursorEnt)>gGraviHandsMaxWeight)
+					pickupFlags |= PickupFlag_TooHeavy;
 			}
 		}
-	} else if (StrContains(classname, "func_physbox")==0) {
+	} else if (StrEqual(classname, "func_physbox")) {
 		if (Entity_GetFlags(cursorEnt) & FL_FROZEN) {
-			PlayActionSound(client,GH_ACTION_INVALID);
-			return false;
-		}
-		int spawnFlags = Entity_GetSpawnFlags(cursorEnt);
-		bool motion = Phys_IsMotionEnabled(cursorEnt);
-		if ((spawnFlags & SF_PHYSBOX_ENABLE_ON_PHYSCANNON) && !motion) {
-			Phys_EnableMotion(cursorEnt, true);
-			motion = true;
-		}
-		if (!(spawnFlags & SF_PHYSBOX_ALWAYS_PICK_UP)) {
-			if (spawnFlags & SF_PHYSBOX_NEVER_PICK_UP) {
-				PlayActionSound(client,GH_ACTION_INVALID);
-				return false;
+			pickupFlags |= PickupFlag_MotionDisabled;
+		} else {
+			int spawnFlags = Entity_GetSpawnFlags(cursorEnt);
+			bool motion = Phys_IsMotionEnabled(cursorEnt);
+			if ((spawnFlags & SF_PHYSBOX_ENABLE_ON_PHYSCANNON) && !motion) {
+				pickupFlags |= PickupFlag_EnableMotion;
+				motion = true;
 			}
-			if (GetEntityMoveType(cursorEnt)==MOVETYPE_NONE || !motion) {
-				PlayActionSound(client,GH_ACTION_INVALID);
-				return false;
+			if (!(spawnFlags & SF_PHYSBOX_ALWAYS_PICK_UP)) {
+				if (spawnFlags & SF_PHYSBOX_NEVER_PICK_UP)
+					pickupFlags |= PickupFlag_SpawnFlags;
+				if (GetEntityMoveType(cursorEnt)==MOVETYPE_NONE || !motion)
+					pickupFlags |= PickupFlag_MotionDisabled;
+				if (Phys_GetMass(cursorEnt)>gGraviHandsMaxWeight)
+					pickupFlags |= PickupFlag_TooHeavy;
 			}
-			if (Phys_GetMass(cursorEnt)>250.0) {
-				PlayActionSound(client,GH_ACTION_TOOHEAVY);
-				return false;
-			}
+			if ((spawnFlags & SF_PHYSBOX_NEVER_PUNT)!=0) pickupFlags |= PickupFlag_BlockPunting;
 		}
-		GravHand[client].blockPunt = (spawnFlags & SF_PHYSBOX_NEVER_PUNT)!=0;
-	} else {
+	} else { //not an entity we could pick up
 		PlayActionSound(client,GH_ACTION_INVALID);
 		return false;
 	}
+	//ok we now have a potential candidate for grabbing and collected some meta info
+	// lets ask all other plugins if they are ok with us grabbing this thing
+	if (!NotifyGraviHandsGrab(client, cursorEnt, pickupFlags)) { //plugins said no
+		PlayActionSound(client,GH_ACTION_INVALID);
+		return false;
+	}
+	if ((pickupFlags & 0xff)) { //if not plugin blocked but still not possible, i want to react to the tooheavy flag
+		PlayActionSound(client, (pickupFlags == PickupFlag_TooHeavy)?GH_ACTION_TOOHEAVY:GH_ACTION_INVALID);
+		return false;
+	}
+	//ok now we can finally pick this thing up
+	if ((pickupFlags & PickupFlag_EnableMotion)!=0) Phys_EnableMotion(cursorEnt, true);
+	GravHand[client].blockPunt = ((pickupFlags & PickupFlag_BlockPunting)!=0);
+	
 	//generate outputs
 	FireEntityOutput(cursorEnt, "OnPhysGunPickup", client);
 	//check if this entity is already grabbed
@@ -264,15 +276,55 @@ static bool TryPickupCursorEnt(int client, float yawAngle[3]) {
 	GravHand[client].dontCheckStartPost = movementCollides(client, endpos, true);
 	GravHand[client].collisionFlags = Entity_GetCollisionGroup(cursorEnt);
 	Entity_SetCollisionGroup(cursorEnt, COLLISION_GROUP_DEBRIS_TRIGGER);
+	GravHand[client].lastInteractedEnt = GravHand[client].grabbedEnt;
+	GravHand[client].lastInteractedTime = GetGameTime();
 	//sound
 	PlayActionSound(client,GH_ACTION_PICKUP);
-//	Phys_EnableCollisions(cursorEnt, false);
+	//notify plugins
+	NotifyGraviHandsGrabPost(client, cursorEnt);
+	return true;
+}
+
+static bool TryPullCursorEnt(int client, float yawAngle[3]) {
+	float target[3], eyePos[3];
+	float force[3], grav[3];
+	char classname[64];
+	
+	int entity = pew(client, target, gGraviHandsPullDistance);
+	if (entity == INVALID_ENT_REFERENCE) return false;
+	Entity_GetClassName(entity, classname, sizeof(classname));
+	if (StrContains(classname,"prop_physics")!=0 && !StrEqual(classname, "func_physbox")) return false;
+	
+	GetAngleVectors(yawAngle, force, NULL_VECTOR, NULL_VECTOR);
+	GetClientEyePosition(client, eyePos);
+	//manipulate the target position to be grab distance in front of the player
+	float dist = gGraviHandsGrabDistance < 50.0 ? 50.0 : gGraviHandsGrabDistance;
+	grav = force; //abuse the grav vector for distance
+	ScaleVector(grav, dist);
+	AddVectors(eyePos, grav, eyePos);
+	//lerp the force over the distance
+	dist = GetVectorDistance(eyePos, target);
+	float normalizedDistance = 1.0-(dist / gGraviHandsPullDistance); //1- because we want to pull towards the player
+	float forceRange = gGraviHandsPullForceNear-gGraviHandsPullForceFar; //force range
+	float forceScale = normalizedDistance * forceRange + gGraviHandsPullForceFar; //scaled over range + min
+	ScaleVector(force, -forceScale);
+	Phys_GetEnvironmentGravity(grav);
+	SubtractVectors(force, grav, force);
+	Phys_ApplyForceCenter(entity, force);
+//	Phys_ApplyForceOffset(entity, force, target); //does weird stuff :o
+	
+	//play sound
+	if (EntRefToEntIndex(GravHand[client].lastInteractedEnt) != entity) {
+		GravHand[client].lastInteractedEnt = EntIndexToEntRef(entity);
+		PlayActionSound(client, GH_ACTION_TOOHEAVY); //i think that was the same sound?
+	}
+	GravHand[client].lastInteractedTime = GetGameTime();
 	return true;
 }
 
 static void ThinkHeldProp(int client, int grabbed, int buttons, float yawAngle[3]) {
 	float endpos[3], killVelocity[3];
-	pew(client, endpos);
+	pew(client, endpos, gGraviHandsGrabDistance);
 	int rotProxy = getOrCreateProxyEnt(client, endpos);
 	if (rotProxy != INVALID_ENT_REFERENCE && grabbed != INVALID_ENT_REFERENCE) { //holding
 		if (!movementCollides(client, endpos, GravHand[client].dontCheckStartPost)) {
@@ -285,9 +337,11 @@ static void ThinkHeldProp(int client, int grabbed, int buttons, float yawAngle[3
 				GravHand[client].dontCheckStartPost = false;
 				TeleportEntity(rotProxy, endpos, yawAngle, killVelocity);
 			}
-		} else if (GetVectorDistance(GravHand[client].lastValid, endpos) > DROP_DISTANCE) {
+		} else if (GetVectorDistance(GravHand[client].lastValid, endpos) > gGraviHandsDropDistance) {
 			GravHand[client].forceDropProp = true;
 		}
+		GravHand[client].lastInteractedEnt = EntIndexToEntRef(grabbed);
+		GravHand[client].lastInteractedTime = GetGameTime();
 	}
 }
 
@@ -300,10 +354,10 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		AcceptEntityInput(entity, "ClearParent");
 		//fling
 		bool didPunt;
-		pew(client, vec);
+		pew(client, vec, gGraviHandsDropDistance);
 		if (punt && !IsNullVector(dvangles)) { //punt
 			GetAngleVectors(dvangles, vec, NULL_VECTOR, NULL_VECTOR);
-			ScaleVector(vec, 100000.0/Phys_GetMass(entity));
+			ScaleVector(vec, gGraviHandsPuntForce*100.0/Phys_GetMass(entity));
 //				AddVectors(vec, fwd, vec);
 			didPunt=true;
 		} else if (!movementCollides(client, vec, false)) { //throw with swing
@@ -320,9 +374,10 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		//reset ref because we're nice
 		Entity_SetCollisionGroup(entity, GravHand[client].collisionFlags);
 		GravHand[client].grabbedEnt = INVALID_ENT_REFERENCE;
-		didStuff = true;
+		NotifyGraviHandsDropped(client, entity, didPunt);
 		//play sound
 		PlayActionSound(client,didPunt?GH_ACTION_THROW:GH_ACTION_DROP);
+		didStuff = true;
 	}
 	if ((entity = EntRefToEntIndex(GravHand[client].rotProxyEnt))!=INVALID_ENT_REFERENCE) {
 		RequestFrame(killEntity, entity);
@@ -371,3 +426,31 @@ static void killEntity(int entity) {
 	if (IsValidEntity(entity))
 		AcceptEntityInput(entity, "Kill");
 }
+
+bool FixPhysPropAttacker(int victim, int& attacker, int& inflictor) {
+	if (attacker == inflictor && victim != attacker && !IsValidClient(attacker)) {
+		char classname[64];
+		Entity_GetClassName(attacker, classname, sizeof(classname));
+		if (StrEqual(classname, "func_physbox") || StrContains(classname, "prop_physics")==0) {
+			float time;
+			int thrower;
+			for (int c=1;c<=MaxClients;c++) {
+				if (IsValidClient(c) && EntRefToEntIndex(GravHand[c].lastInteractedEnt) == attacker && GravHand[c].lastInteractedTime > time) {
+					thrower = c;
+					time = GravHand[c].lastInteractedTime;
+				}
+			}
+			if (GetGameTime()-time < 7.0) { //timeout interactions
+				attacker = thrower;
+				return attacker == victim; //signal to supress damage
+			}
+		}
+	}
+	return false;
+}
+
+//stock void DebugLine(int client, const float from[3], const float to[3]) {
+//	int color[]={255,255,255,255};
+//	TE_SetupBeamPoints(from, to, PrecacheModel("materials/sprites/laserbeam.vmt", false), 0, 0, 1, 1.0, 1.0, 1.0, 0, 0.0, color, 0);
+//	TE_SendToClient(client);
+//}

@@ -9,6 +9,7 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <regex>
+#include <convars>
 
 //generic dependencies
 #include <smlib>
@@ -88,6 +89,21 @@ bool depVehicles;
 bool depTFEconData;
 bool depTF2IDB;
 
+static ConVar cvarGraviHandsMaxWeight;
+float gGraviHandsMaxWeight;
+static ConVar cvarGraviHandsPuntForce;
+float gGraviHandsPuntForce;
+static ConVar cvarGraviHandsDropDistance;
+float gGraviHandsDropDistance;
+static ConVar cvarGraviHandsGrabDistance;
+float gGraviHandsGrabDistance;
+static ConVar cvarGraviHandsPullDistance;
+float gGraviHandsPullDistance;
+static ConVar cvarGraviHandsPullForceFar;
+float gGraviHandsPullForceFar;
+static ConVar cvarGraviHandsPullForceNear;
+float gGraviHandsPullForceNear;
+
 //global structures and data defined, include submodules
 #include "tf2puzzle_econwrapper.sp"
 #include "tf2puzzle_weapons.sp"
@@ -104,6 +120,9 @@ public void OnPluginStart() {
 	HookEvent("teamplay_restart_round", OnMapEntitiesRefreshed);
 	
 	InitOutputCache();
+	
+	CreateConvars();
+	CreateForwards();
 	
 	for (int client=1; client<=MaxClients; client++) {
 		if (!IsValidClient(client)) continue;
@@ -159,7 +178,8 @@ public void OnMapEntitiesRefreshed(Event event, const char[] name, bool dontBroa
 }
 
 public void OnPluginEnd() {
-	for (int i=1;i<=MaxClients;i++) {
+	for (int client=1;client<=MaxClients;client++) {
+		if (!IsValidClient(client)) continue;
 		ForceDropItem(client);
 		DropHolsteredMelee(client);
 	}
@@ -208,7 +228,9 @@ public Action OnClientWeaponEquip(int client, int weapon) {
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2]) {
-	if (clientCmdHoldProp(client, buttons, vel, angles)) {
+	float velocity[3];
+	Entity_GetAbsVelocity(client, velocity);
+	if (clientCmdHoldProp(client, buttons, velocity, angles)) {
 		buttons &=~ IN_ATTACK2;
 		return Plugin_Changed;
 	}
@@ -216,6 +238,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 }
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
+	if (FixPhysPropAttacker(victim, attacker, inflictor)) return Plugin_Handled;
 	if (IsValidClient(attacker) && victim != attacker) {
 		if (weapon != INVALID_ENT_REFERENCE && GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex")==5 && player[attacker].holsteredWeapon!=INVALID_ITEM_DEFINITION) {
 			//this player is currently using fists, don't damage
@@ -260,4 +283,168 @@ public Action Command_Holster(int client, int args) {
 	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
 	else HolsterMelee(client);
 	return Plugin_Handled;
+}
+
+/** convar **/
+
+void CreateConvars() {
+	delete CreateConVar("tf2puzzle_version", PLUGIN_VERSION, "TF2 Puzzle Version", FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	
+	cvarGraviHandsMaxWeight = CreateConVar("tf2puzzle_gravihands_maxmass", "250.0", _, _, true, 0.0);
+	cvarGraviHandsMaxWeight.AddChangeHook(OnCVarGraviHandsMaxWeightChange);
+	
+	cvarGraviHandsPuntForce = CreateConVar("tf2puzzle_gravihands_throwforce", "1000.0", _, _, true, 0.0);
+	cvarGraviHandsPuntForce.AddChangeHook(OnCVarGraviHandsPuntForceChange);
+	
+	cvarGraviHandsDropDistance = CreateConVar("tf2puzzle_gravihands_dropdistance", "200.0", "Maximum distance to the grab point when getting stuck, before being dropped", _, true, 0.0);
+	cvarGraviHandsDropDistance.AddChangeHook(OnCVarGraviHandsDropDistanceChange);
+	
+	cvarGraviHandsGrabDistance = CreateConVar("tf2puzzle_gravihands_grabdistance", "120.0", "Maximum distance to grab stuff from", _, true, 0.0);
+	cvarGraviHandsGrabDistance.AddChangeHook(OnCVarGraviHandsGrabDistanceChange);
+	
+	cvarGraviHandsPullDistance = CreateConVar("tf2puzzle_gravihands_pulldistance", "850.0", "Maximum distance to pull props from", _, true, 0.0);
+	cvarGraviHandsPullDistance.AddChangeHook(OnCVarGraviHandsPullDistanceChange);
+	
+	cvarGraviHandsPullForceFar = CreateConVar("tf2puzzle_gravihands_pullforce_far", "400.0", _, _, true, 0.0);
+	cvarGraviHandsPullForceFar.AddChangeHook(OnCVarGraviHandsPullForceFarChange);
+	
+	cvarGraviHandsPullForceNear = CreateConVar("tf2puzzle_gravihands_pullforce_near", "1000.0", _, _, true, 0.0);
+	cvarGraviHandsPullForceNear.AddChangeHook(OnCVarGraviHandsPullForceNearChange);
+	
+	AutoExecConfig();
+	
+	OnCVarGraviHandsMaxWeightChange(cvarGraviHandsMaxWeight, "", "");
+	OnCVarGraviHandsPuntForceChange(cvarGraviHandsPuntForce, "", "");
+	OnCVarGraviHandsDropDistanceChange(cvarGraviHandsDropDistance, "", "");
+	OnCVarGraviHandsGrabDistanceChange(cvarGraviHandsGrabDistance, "", "");
+	OnCVarGraviHandsPullDistanceChange(cvarGraviHandsPullDistance, "", "");
+	OnCVarGraviHandsPullForceFarChange(cvarGraviHandsPullForceFar, "", "");
+	OnCVarGraviHandsPullForceNearChange(cvarGraviHandsPullForceNear, "", "");
+}
+public void OnCVarGraviHandsMaxWeightChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsMaxWeight = convar.FloatValue;
+}
+public void OnCVarGraviHandsPuntForceChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsPuntForce = convar.FloatValue;
+}
+public void OnCVarGraviHandsDropDistanceChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsDropDistance = convar.FloatValue;
+}
+public void OnCVarGraviHandsGrabDistanceChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsGrabDistance = convar.FloatValue;
+}
+public void OnCVarGraviHandsPullDistanceChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsPullDistance = convar.FloatValue;
+}
+public void OnCVarGraviHandsPullForceFarChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsPullForceFar = convar.FloatValue;
+}
+public void OnCVarGraviHandsPullForceNearChange(ConVar convar, const char[] oldValue, const char[] newValue) {
+	gGraviHandsPullForceNear = convar.FloatValue;
+}
+
+/** natives & forwards **/
+
+static GlobalForward fwdWeaponHolster;
+static GlobalForward fwdWeaponHolsterPost;
+static GlobalForward fwdWeaponUnholster;
+static GlobalForward fwdWeaponUnholsterPost;
+static GlobalForward fwdGraviHandsGrab;
+static GlobalForward fwdGraviHandsGrabPost;
+static GlobalForward fwdGraviHandsDropped;
+
+void CreateForwards() {
+	fwdWeaponHolster       = CreateGlobalForward("OnClientHolsterWeapon", ET_Event, Param_Cell, Param_Cell);
+	fwdWeaponHolsterPost   = CreateGlobalForward("OnClientHolsterWeaponPost", ET_Ignore, Param_Cell, Param_Cell);
+	fwdWeaponUnholster     = CreateGlobalForward("OnClientUnholsterWeapon", ET_Event, Param_Cell, Param_Cell);
+	fwdWeaponUnholsterPost = CreateGlobalForward("OnClientUnholsterWeaponPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
+	fwdGraviHandsGrab      = CreateGlobalForward("OnClientGraviHandsGrab", ET_Event, Param_Cell, Param_Cell, Param_CellByRef);
+	fwdGraviHandsGrabPost  = CreateGlobalForward("OnClientGraviHandsGrabPost", ET_Ignore, Param_Cell, Param_Cell);
+	fwdGraviHandsDropped   = CreateGlobalForward("OnClientGraviHandsDropped", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
+}
+
+bool NotifyWeaponHolster(int client, int weaponDef) {
+	Action result;
+	Call_StartForward(fwdWeaponHolster);
+	Call_PushCell(client);
+	Call_PushCell(weaponDef);
+	Call_Finish(result);
+	return (result < Plugin_Handled);
+}
+void NotifyWeaponHolsterPost(int client, int weaponDef) {
+	Call_StartForward(fwdWeaponHolsterPost);
+	Call_PushCell(client);
+	Call_PushCell(weaponDef);
+	Call_Finish();
+}
+bool NotifyWeaponUnholster(int client, int weaponDef) {
+	Action result;
+	Call_StartForward(fwdWeaponUnholster);
+	Call_PushCell(client);
+	Call_PushCell(weaponDef);
+	Call_Finish(result);
+	return (result < Plugin_Handled);
+}
+void NotifyWeaponUnholsterPost(int client, int weaponDef, bool dropped) {
+	Call_StartForward(fwdWeaponUnholsterPost);
+	Call_PushCell(client);
+	Call_PushCell(weaponDef);
+	Call_PushCell(dropped);
+	Call_Finish();
+}
+bool NotifyGraviHandsGrab(int client, int entity, int& pickupFlags) {
+	Action result;
+	int tmp = pickupFlags;
+	Call_StartForward(fwdGraviHandsGrab);
+	Call_PushCell(client);
+	Call_PushCell(entity);
+	Call_PushCellRef(tmp);
+	Call_Finish(result);
+	if (result == Plugin_Changed) pickupFlags = tmp;
+	return (result < Plugin_Handled);
+}
+void NotifyGraviHandsGrabPost(int client, int entity) {
+	Call_StartForward(fwdGraviHandsGrabPost);
+	Call_PushCell(client);
+	Call_PushCell(entity);
+	Call_Finish();
+}
+void NotifyGraviHandsDropped(int client, int entity, bool punted) {
+	Call_StartForward(fwdGraviHandsDropped);
+	Call_PushCell(client);
+	Call_PushCell(entity);
+	Call_PushCell(punted);
+	Call_Finish();
+}
+
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
+	CreateNative("GetClientHoslteredWeapon", NativeGetPlayerHolster);
+	CreateNative("GetGraviHandsHeldEntity", NativeGetGraviHandsEntity);
+	CreateNative("ForceGraviHandsDropEntity", NativeDropGraviHandsEntity);
+	RegPluginLibrary("tf2puzzle");
+}
+public any NativeGetPlayerHolster(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	if (!IsValidClient(client)) return -1;
+	return player[client].holsteredWeapon;
+}
+public any NativeGetGraviHandsEntity(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	if (!IsValidClient(client) || GravHand[client].forceDropProp) return INVALID_ENT_REFERENCE;
+	return GravHand[client].grabbedEnt;
+}
+public any NativeDropGraviHandsEntity(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	bool punt = GetNativeCell(2);
+	if (!IsValidClient(client) || GravHand[client].forceDropProp || GravHand[client].grabbedEnt == INVALID_ENT_REFERENCE) return;
+	float vel[3];
+	Entity_GetAbsVelocity(client, vel);
+	if (punt) {
+		float ang[3];
+		GetClientEyeAngles(client, ang);
+		ForceDropItem(client, true, vel, ang);
+	} else {
+		ForceDropItem(client, false, vel);
+	}
 }
