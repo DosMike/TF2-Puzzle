@@ -339,23 +339,23 @@ void PlayActionSound(int client, int sound) {
 	if (GravHand[client].lastAudibleAction != sound || GravHand[client].playNextAction - ct < 0) {
 		switch (sound) {
 			case GH_ACTION_PICKUP: {
-				EmitSoundToAll(GH_SOUND_PICKUP);
+				EmitSoundToAll(GH_SOUND_PICKUP, client);
 				GravHand[client].playNextAction = ct + 1.5;
 			}
 			case GH_ACTION_DROP: {
-				EmitSoundToAll(GH_SOUND_DROP);
+				EmitSoundToAll(GH_SOUND_DROP, client);
 				GravHand[client].playNextAction = ct + 1.5;
 			}
 			case GH_ACTION_TOOHEAVY: {
-				EmitSoundToAll(GH_SOUND_TOOHEAVY);
+				EmitSoundToAll(GH_SOUND_TOOHEAVY, client);
 				GravHand[client].playNextAction = ct + 1.5;
 			}
 			case GH_ACTION_INVALID: {
-				EmitSoundToAll(GH_SOUND_INVALID);
+				EmitSoundToAll(GH_SOUND_INVALID, client);
 				GravHand[client].playNextAction = ct + 0.5;
 			}
 			case GH_ACTION_THROW: {
-				EmitSoundToAll(GH_SOUND_THROW);
+				EmitSoundToAll(GH_SOUND_THROW, client);
 				GravHand[client].playNextAction = ct + 0.5;
 			}
 			default: {

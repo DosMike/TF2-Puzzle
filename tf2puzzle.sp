@@ -36,7 +36,7 @@
 //we require more heap in order to be able to parse the bsp lump. value is not yet optimized
 #pragma dynamic 0x200000
 
-#define PLUGIN_VERSION "22w05b"
+#define PLUGIN_VERSION "22w05c"
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
