@@ -7,6 +7,13 @@ Clarification: The goal of this plugin is NOT to make old puzzle maps compatible
 This plugin only serves as a utility to allow puzzle style maps to be created.
 ( Or for a cheap GravGun if you're after that :D )
 
+But why am I not using [TF2_PhysicsGun](https://github.com/BattlefieldDuck/TF2_PhysicsGun) or
+[Gravity Gun Mod](https://forums.alliedmods.net/showthread.php?p=1294817)?
+Well simply put those plugin are too powerful for what I want. Those plugins implement a
+Super-PhysGun style of prop handling while I want a normal Gravity Gun behaviour of pull stuff,
+pick it up and throw it. After all, every player is supposed to be allowed to manipulate props
+with it, and that in the style of HL2DM Puzzle maps!
+
 ## Gravity Hands
 
 Players can use `/hands` or `/holster` to put away their weapons. 
