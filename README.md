@@ -68,7 +68,9 @@ vehicles available are `hl2_jeep` and `hl2_airboat`.
 ### `!activator,TF2Puzzle,EnableInputs <inputs>`
 
 I couldn't find any good way to disable jumping outside of `trigger_push`ing players down, so player inputs can
-now selectively be toggled using these outputs. Possible values are:
+now selectively be toggled using these outputs. Upon death or map reset, the input control flags will reset and
+the player will be able to control normally again.
+Possible values are:
 * *ATTACK* - Usually mouse 1
 * *JUMP* - Usually space
 * *DUCK* - Crouching, usually ctrl
