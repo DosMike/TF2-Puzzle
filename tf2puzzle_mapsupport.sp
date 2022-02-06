@@ -165,16 +165,18 @@ Action RunCustomOutputDelayed(Handle timer, Handle data) {
 }
 
 void RunCustomOutput(int caller, int activator, int target, const char[] action) {
-	if (StrEqual(action, "strip", false)) {
+	char argument[64];
+	int nextArg = BreakString(action, argument, sizeof(argument));
+	if (StrEqual(argument, "strip", false)) {
 		if (IsValidClient(target)) {
 			TF2_RemoveAllWeapons(target);
 			EquipPlayerMelee(target, 5);
 		}
-	} else if (StrEqual(action, "regenerate", false)) {
+	} else if (StrEqual(argument, "regenerate", false)) {
 		if (IsValidClient(target)) {
 			TF2_RegeneratePlayer(target);
 		}
-	} else if (StrEqual(action, "resetcooldowns", false)) {
+	} else if (StrEqual(argument, "resetcooldowns", false)) {
 		if (IsValidClient(target) && IsPlayerAlive(target)) {
 			SetEntPropFloat(target, Prop_Send, "m_flEnergyDrinkMeter", 100.0);
 			SetEntPropFloat(target, Prop_Send, "m_flHypeMeter", 100.0);
@@ -186,11 +188,12 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 			SetEntPropFloat(target, Prop_Send, "m_flNextRageEarnTime", GetGameTime());
 			SetEntPropFloat(target, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
 		}
-	} else if (StrContains(action, "stripwhitelist ", false)==0) {
+	} else if (StrEqual(argument, "stripwhitelist", false)) {
+		//not using breakstring because we need all classnames collected for checking, saving string copyies this way
 		if (IsValidClient(target)) {
 			UnholsterMelee(target);
 			char whiteclass[16][64];
-			int clz=ExplodeString(action[15], " ", whiteclass, sizeof(whiteclass), sizeof(whiteclass[]));
+			int clz=ExplodeString(action[nextArg], " ", whiteclass, sizeof(whiteclass), sizeof(whiteclass[]));
 			bool whiteslots[6];
 			bool startsWith[16];
 			int tmp;
@@ -238,7 +241,8 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 				Client_SetActiveWeapon(target, Client_GetWeaponBySlot(target, switchto));
 			}
 		}
-	} else if (StrContains(action, "createvehicle ", false)==0) {
+	} else if (StrEqual(argument, "createvehicle", false)) {
+		//not using breakstring here because we can only spawn one vehicle at a time and no copy is faster
 		if (IsValidEntity(target)) {
 			char buffer[4];
 			if (!depVehicles) {
@@ -252,7 +256,55 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 				PrintToServer("[TF2Puzzle] Map Error: Tried to create vehicle with unknown id '%s'");
 			}
 		}
+	} else if (StrEqual(argument, "disableinputs", false)) {
+		if (IsValidClient(target)) {
+			int mask;
+			while (nextArg > 0) {
+				nextArg = BreakString(action[nextArg], argument, sizeof(argument));
+				
+				PrintToServer("Next Input: %s", argument);
+				if (StrEqual(argument, "ATTACK", false)) mask |= IN_ATTACK;
+				else if (StrEqual(argument, "JUMP", false)) mask |= IN_JUMP;
+				else if (StrEqual(argument, "DUCK", false)) mask |= IN_DUCK;
+				else if (StrEqual(argument, "FORWARD", false)) mask |= IN_FORWARD;
+				else if (StrEqual(argument, "BACK", false)) mask |= IN_BACK;
+				else if (StrEqual(argument, "USE", false)) mask |= IN_USE;
+				else if (StrEqual(argument, "MOVELEFT", false)) mask |= IN_MOVELEFT;
+				else if (StrEqual(argument, "MOVERIGHT", false)) mask |= IN_MOVERIGHT;
+				else if (StrEqual(argument, "ATTACK2", false)) mask |= IN_ATTACK2;
+				else if (StrEqual(argument, "RELOAD", false)) mask |= IN_RELOAD;
+				else if (StrEqual(argument, "SCORE", false)) mask |= IN_SCORE;
+				else if (StrEqual(argument, "ATTACK3", false)) mask |= IN_ATTACK3;
+				else if (StrEqual(argument, "ALL", false)) mask |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
+			}
+			PrintToServer("Disabling Inputs: '%s' %d", argument, mask);
+			player[target].disabledInputs |= mask;
+		}
+	} else if (StrEqual(argument, "enableinputs", false)) {
+		if (IsValidClient(target)) {
+			int mask;
+			while (nextArg > 0) {
+				nextArg = BreakString(action[nextArg], argument, sizeof(argument));
+				
+				if (StrEqual(argument, "ATTACK", false)) mask |= IN_ATTACK;
+				else if (StrEqual(argument, "JUMP", false)) mask |= IN_JUMP;
+				else if (StrEqual(argument, "DUCK", false)) mask |= IN_DUCK;
+				else if (StrEqual(argument, "FORWARD", false)) mask |= IN_FORWARD;
+				else if (StrEqual(argument, "BACK", false)) mask |= IN_BACK;
+				else if (StrEqual(argument, "USE", false)) mask |= IN_USE;
+				else if (StrEqual(argument, "MOVELEFT", false)) mask |= IN_MOVELEFT;
+				else if (StrEqual(argument, "MOVERIGHT", false)) mask |= IN_MOVERIGHT;
+				else if (StrEqual(argument, "ATTACK2", false)) mask |= IN_ATTACK2;
+				else if (StrEqual(argument, "RELOAD", false)) mask |= IN_RELOAD;
+				else if (StrEqual(argument, "SCORE", false)) mask |= IN_SCORE;
+				else if (StrEqual(argument, "ATTACK3", false)) mask |= IN_ATTACK3;
+				else if (StrEqual(argument, "ALL", false)) mask |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
+			}
+			player[target].disabledInputs &=~ mask;
+		}
 	} else {
-		PrintToServer("[TF2Puzzle] Map Error: Unknown TF2Puzzle Output '%s' from hammerId %i, triggered by %N", action, Entity_GetHammerId(caller), activator);
+		PrintToServer("[TF2Puzzle] Map Error: Unknown TF2Puzzle Output '%s' from hammerId %i, triggered by %i", action, Entity_GetHammerId(caller), activator);
 	}
 }

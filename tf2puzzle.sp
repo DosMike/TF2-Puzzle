@@ -37,7 +37,7 @@
 //we require more heap in order to be able to parse the bsp lump. value is not yet optimized
 #pragma dynamic 0x200000
 
-#define PLUGIN_VERSION "22w05d"
+#define PLUGIN_VERSION "22w05e"
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
@@ -77,11 +77,13 @@ enum struct PlayerData {
 	float timeSpawned;
 	bool handledDeath;
 	int holsteredWeapon;
+	int disabledInputs;
 	
 	void Reset() {
 		this.timeSpawned     = 0.0;
 		this.handledDeath    = false;
 		this.holsteredWeapon = INVALID_ITEM_DEFINITION;
+		this.disabledInputs  = 0;
 	}
 }
 PlayerData player[MAXPLAYERS+1];
@@ -175,6 +177,9 @@ public void OnMapStart() {
 
 public void OnMapEntitiesRefreshed(Event event, const char[] name, bool dontBroadcast) {
 	AttachOutputHooks();
+	for (int client=1;client<=MaxClients;client++)
+		if (IsValidClient(client) && IsPlayerAlive(client))
+			HandlePlayerDeath(client); //force reset plugin internal state
 }
 
 public void OnPluginEnd() {
@@ -228,13 +233,21 @@ public Action OnClientWeaponEquip(int client, int weapon) {
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2]) {
+	bool changed;
+	
+	if (player[client].disabledInputs) {
+		buttons &=~ player[client].disabledInputs;
+		changed = true;
+	}
+	
 	float velocity[3];
 	Entity_GetAbsVelocity(client, velocity);
 	if (clientCmdHoldProp(client, buttons, velocity, angles)) {
 		buttons &=~ IN_ATTACK2;
-		return Plugin_Changed;
+		changed = true;
 	}
-	return Plugin_Continue;
+	
+	return changed?Plugin_Changed:Plugin_Continue;
 }
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
@@ -265,6 +278,8 @@ public void OnClientDeathPost(Event event, const char[] name, bool dontBroadcast
 void HandlePlayerDeath(int client) {
 	if (player[client].handledDeath) return;
 	player[client].handledDeath = true;
+	
+	player[client].disabledInputs = 0;
 	DropHolsteredMelee(client);
 }
 
@@ -324,7 +339,7 @@ void CreateConvars() {
 }
 public void OnCVarLockedChange(ConVar convar, const char[] oldValue, const char[] newValue) {
 	char dbuf[32];
-	ConVar.GetDefault(dbuf, sizeof(dbuf));
+	convar.GetDefault(dbuf, sizeof(dbuf));
 	if (!StrEqual(dbuf,newValue)) convar.RestoreDefault();
 }
 public void OnCVarGraviHandsMaxWeightChange(ConVar convar, const char[] oldValue, const char[] newValue) {

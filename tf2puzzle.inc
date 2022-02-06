@@ -3,8 +3,8 @@
 #endif
 #define _tf2_puzzle
 
-#define PUZZLE_VERSION "22w05d"
-#define PUZZLE_BUILD 220504
+#define PUZZLE_VERSION "22w05e"
+#define PUZZLE_BUILD 220505
 
 /**
  * There are two flags that might not be immediately obvious:

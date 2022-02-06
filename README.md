@@ -35,6 +35,8 @@ To help you keep track of this bsp lump, the plugin will print the lump size bef
 
 Note on weapon stripping: The plugin always tries to give at least the gravity hands to prevent T-posing.
 
+Custom output names and stuff is all case-insensitive btw, as I'm not a fan of forcing case.
+
 ### `!activator,TF2Puzzle,Strip`
 Take all weapons from the player
 
@@ -61,6 +63,25 @@ that vehicle plugin contains a section with the specified name, it will try to s
 target. I recommend using an `OnUserX` output for a `info_target`. Note that vehicles might be rotated by
 90 deg. If you need them spawned without interaction, use a `logic_auto`s `OnMapStart`. The default
 vehicles available are `hl2_jeep` and `hl2_airboat`.
+
+### `!activator,TF2Puzzle,DisableInputs <inputs>` and
+### `!activator,TF2Puzzle,EnableInputs <inputs>`
+
+I couldn't find any good way to disable jumping outside of `trigger_push`ing players down, so player inputs can
+now selectively be toggled using these outputs. Possible values are:
+* *ATTACK* - Usually mouse 1
+* *JUMP* - Usually space
+* *DUCK* - Crouching, usually ctrl
+* *FORWARD* - Usually w
+* *BACK* - Usually s
+* *USE* - The actualy +use, in TF2 unbound by default
+* *MOVELEFT* - Usually a
+* *MOVERIGHT* - Usually d
+* *ATTACK2* - Usually mouse 2
+* *RELOAD* - Usually r
+* *SCORE* - Usually tab
+* *ATTACK3* - Usually mouse 3 (mouse wheel click)
+* *ALL* - All of the above
 
 ## Natives and Forwards
 
