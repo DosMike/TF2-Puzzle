@@ -262,7 +262,6 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 			while (nextArg > 0) {
 				nextArg = BreakString(action[nextArg], argument, sizeof(argument));
 				
-				PrintToServer("Next Input: %s", argument);
 				if (StrEqual(argument, "ATTACK", false)) mask |= IN_ATTACK;
 				else if (StrEqual(argument, "JUMP", false)) mask |= IN_JUMP;
 				else if (StrEqual(argument, "DUCK", false)) mask |= IN_DUCK;
@@ -278,7 +277,6 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 				else if (StrEqual(argument, "ALL", false)) mask |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
 				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
 			}
-			PrintToServer("Disabling Inputs: '%s' %d", argument, mask);
 			player[target].disabledInputs |= mask;
 		}
 	} else if (StrEqual(argument, "enableinputs", false)) {
