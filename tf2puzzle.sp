@@ -78,12 +78,14 @@ enum struct PlayerData {
 	bool handledDeath;
 	int holsteredWeapon;
 	int disabledInputs;
+	bool disableAirJump; //parachute, doublejumps, ...
 	
 	void Reset() {
 		this.timeSpawned     = 0.0;
 		this.handledDeath    = false;
 		this.holsteredWeapon = INVALID_ITEM_DEFINITION;
 		this.disabledInputs  = 0;
+		this.disableAirJump  = false;
 	}
 }
 PlayerData player[MAXPLAYERS+1];
@@ -116,6 +118,7 @@ public void OnPluginStart() {
 	
 	RegConsoleCmd("sm_hands", Command_Holster, "Put away weapons");
 	RegConsoleCmd("sm_holster", Command_Holster, "Put away weapons");
+	AddCommandListener(OnCommandSlot0, "slot0");
 	
 	HookEvent("player_death", OnClientDeathPost);
 	HookEvent("teamplay_round_start", OnMapEntitiesRefreshed);
@@ -239,6 +242,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		buttons &=~ player[client].disabledInputs;
 		changed = true;
 	}
+	if (buttons & IN_JUMP && player[client].disableAirJump && !(Entity_GetFlags(client) & FL_ONGROUND)) {
+		buttons &=~ IN_JUMP;
+		changed = true;
+	}
 	
 	float velocity[3];
 	Entity_GetAbsVelocity(client, velocity);
@@ -298,6 +305,14 @@ bool IsValidClient(int client, bool allowBots=true) {
 
 public Action Command_Holster(int client, int args) {
 	if (!IsValidClient(client,false)) return Plugin_Handled;
+	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
+	else HolsterMelee(client);
+	return Plugin_Handled;
+}
+
+public Action OnCommandSlot0(int client, const char[] command, int argc) {
+	if (!IsValidClient(client,false)) return Plugin_Continue;
+	if (GetClientMenu(client)!=MenuSource_None) return Plugin_Continue;
 	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
 	else HolsterMelee(client);
 	return Plugin_Handled;

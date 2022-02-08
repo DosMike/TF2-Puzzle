@@ -258,49 +258,53 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 		}
 	} else if (StrEqual(argument, "disableinputs", false)) {
 		if (IsValidClient(target)) {
-			int mask;
 			while (nextArg > 0) {
 				nextArg = BreakString(action[nextArg], argument, sizeof(argument));
 				
-				if (StrEqual(argument, "ATTACK", false)) mask |= IN_ATTACK;
-				else if (StrEqual(argument, "JUMP", false)) mask |= IN_JUMP;
-				else if (StrEqual(argument, "DUCK", false)) mask |= IN_DUCK;
-				else if (StrEqual(argument, "FORWARD", false)) mask |= IN_FORWARD;
-				else if (StrEqual(argument, "BACK", false)) mask |= IN_BACK;
-				else if (StrEqual(argument, "USE", false)) mask |= IN_USE;
-				else if (StrEqual(argument, "MOVELEFT", false)) mask |= IN_MOVELEFT;
-				else if (StrEqual(argument, "MOVERIGHT", false)) mask |= IN_MOVERIGHT;
-				else if (StrEqual(argument, "ATTACK2", false)) mask |= IN_ATTACK2;
-				else if (StrEqual(argument, "RELOAD", false)) mask |= IN_RELOAD;
-				else if (StrEqual(argument, "SCORE", false)) mask |= IN_SCORE;
-				else if (StrEqual(argument, "ATTACK3", false)) mask |= IN_ATTACK3;
-				else if (StrEqual(argument, "ALL", false)) mask |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				if (StrEqual(argument, "ATTACK", false)) player[target].disabledInputs |= IN_ATTACK;
+				else if (StrEqual(argument, "JUMP", false)) player[target].disabledInputs |= IN_JUMP;
+				else if (StrEqual(argument, "AIRJUMP", false)) player[target].disableAirJump = true;
+				else if (StrEqual(argument, "DUCK", false)) player[target].disabledInputs |= IN_DUCK;
+				else if (StrEqual(argument, "FORWARD", false)) player[target].disabledInputs |= IN_FORWARD;
+				else if (StrEqual(argument, "BACK", false)) player[target].disabledInputs |= IN_BACK;
+				else if (StrEqual(argument, "USE", false)) player[target].disabledInputs |= IN_USE;
+				else if (StrEqual(argument, "MOVELEFT", false)) player[target].disabledInputs |= IN_MOVELEFT;
+				else if (StrEqual(argument, "MOVERIGHT", false)) player[target].disabledInputs |= IN_MOVERIGHT;
+				else if (StrEqual(argument, "ATTACK2", false)) player[target].disabledInputs |= IN_ATTACK2;
+				else if (StrEqual(argument, "RELOAD", false)) player[target].disabledInputs |= IN_RELOAD;
+				else if (StrEqual(argument, "SCORE", false)) player[target].disabledInputs |= IN_SCORE;
+				else if (StrEqual(argument, "ATTACK3", false)) player[target].disabledInputs |= IN_ATTACK3;
+				else if (StrEqual(argument, "ALL", false)) {
+					player[target].disableAirJump = true;
+					player[target].disabledInputs |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				}
 				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
 			}
-			player[target].disabledInputs |= mask;
 		}
 	} else if (StrEqual(argument, "enableinputs", false)) {
 		if (IsValidClient(target)) {
-			int mask;
 			while (nextArg > 0) {
 				nextArg = BreakString(action[nextArg], argument, sizeof(argument));
 				
-				if (StrEqual(argument, "ATTACK", false)) mask |= IN_ATTACK;
-				else if (StrEqual(argument, "JUMP", false)) mask |= IN_JUMP;
-				else if (StrEqual(argument, "DUCK", false)) mask |= IN_DUCK;
-				else if (StrEqual(argument, "FORWARD", false)) mask |= IN_FORWARD;
-				else if (StrEqual(argument, "BACK", false)) mask |= IN_BACK;
-				else if (StrEqual(argument, "USE", false)) mask |= IN_USE;
-				else if (StrEqual(argument, "MOVELEFT", false)) mask |= IN_MOVELEFT;
-				else if (StrEqual(argument, "MOVERIGHT", false)) mask |= IN_MOVERIGHT;
-				else if (StrEqual(argument, "ATTACK2", false)) mask |= IN_ATTACK2;
-				else if (StrEqual(argument, "RELOAD", false)) mask |= IN_RELOAD;
-				else if (StrEqual(argument, "SCORE", false)) mask |= IN_SCORE;
-				else if (StrEqual(argument, "ATTACK3", false)) mask |= IN_ATTACK3;
-				else if (StrEqual(argument, "ALL", false)) mask |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				if (StrEqual(argument, "ATTACK", false)) player[target].disabledInputs &=~ IN_ATTACK;
+				else if (StrEqual(argument, "JUMP", false)) player[target].disabledInputs &=~ IN_JUMP;
+				else if (StrEqual(argument, "AIRJUMP", false)) player[target].disableAirJump = false;
+				else if (StrEqual(argument, "DUCK", false)) player[target].disabledInputs &=~ IN_DUCK;
+				else if (StrEqual(argument, "FORWARD", false)) player[target].disabledInputs &=~ IN_FORWARD;
+				else if (StrEqual(argument, "BACK", false)) player[target].disabledInputs &=~ IN_BACK;
+				else if (StrEqual(argument, "USE", false)) player[target].disabledInputs &=~ IN_USE;
+				else if (StrEqual(argument, "MOVELEFT", false)) player[target].disabledInputs &=~ IN_MOVELEFT;
+				else if (StrEqual(argument, "MOVERIGHT", false)) player[target].disabledInputs &=~ IN_MOVERIGHT;
+				else if (StrEqual(argument, "ATTACK2", false)) player[target].disabledInputs &=~ IN_ATTACK2;
+				else if (StrEqual(argument, "RELOAD", false)) player[target].disabledInputs &=~ IN_RELOAD;
+				else if (StrEqual(argument, "SCORE", false)) player[target].disabledInputs &=~ IN_SCORE;
+				else if (StrEqual(argument, "ATTACK3", false)) player[target].disabledInputs &=~ IN_ATTACK3;
+				else if (StrEqual(argument, "ALL", false)) {
+					player[target].disableAirJump = false;
+					player[target].disabledInputs &=~ (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
+				}
 				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
 			}
-			player[target].disabledInputs &=~ mask;
 		}
 	} else {
 		PrintToServer("[TF2Puzzle] Map Error: Unknown TF2Puzzle Output '%s' from hammerId %i, triggered by %i", action, Entity_GetHammerId(caller), activator);

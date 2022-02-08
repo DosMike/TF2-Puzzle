@@ -249,7 +249,10 @@ static bool TryPickupCursorEnt(int client, float yawAngle[3]) {
 		return false;
 	}
 	//ok now we can finally pick this thing up
-	if ((pickupFlags & PickupFlag_EnableMotion)!=0) Phys_EnableMotion(cursorEnt, true);
+	if ((pickupFlags & PickupFlag_EnableMotion)!=0 && !Phys_IsMotionEnabled(cursorEnt)) {
+		//Phys_EnableMotion(cursorEnt, true);
+		AcceptEntityInput(cursorEnt, "EnableMotion", client, client);
+	}
 	GravHand[client].blockPunt = ((pickupFlags & PickupFlag_BlockPunting)!=0);
 	
 	//generate outputs
