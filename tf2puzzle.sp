@@ -251,7 +251,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 }
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
-	if (FixPhysPropAttacker(victim, attacker, inflictor)) return Plugin_Handled;
+	if (FixPhysPropAttacker(victim, attacker, inflictor)) {
+		//player was hit by a prop and we fixed the attacker
+		return Plugin_Changed;
+	}
 	if (IsValidClient(attacker) && victim != attacker) {
 		if (weapon != INVALID_ENT_REFERENCE && GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex")==5 && player[attacker].holsteredWeapon!=INVALID_ITEM_DEFINITION) {
 			//this player is currently using fists, don't damage
