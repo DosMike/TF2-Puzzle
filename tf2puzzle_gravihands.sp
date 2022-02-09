@@ -149,31 +149,36 @@ bool clientCmdHoldProp(int client, int &buttons, float velocity[3], float angles
 //	yawAngle[1] = angles[1];
 	int activeWeapon = Client_GetActiveWeapon(client);
 	int defIndex = (activeWeapon == INVALID_ENT_REFERENCE) ? INVALID_ITEM_DEFINITION : GetEntProp(activeWeapon, Prop_Send, "m_iItemDefinitionIndex");
-	if (defIndex == 5 && (buttons & IN_ATTACK2) && !GravHand[client].forceDropProp) {
-		float clientTime = GetClientTime(client);
-		if (GetEntPropFloat(activeWeapon, Prop_Send, "m_flNextPrimaryAttack") - clientTime < 0.1) {
-			SetEntPropFloat(activeWeapon, Prop_Send, "m_flNextPrimaryAttack", clientTime + 1.0);
-			SetEntPropFloat(activeWeapon, Prop_Send, "m_flNextSecondaryAttack", clientTime + 1.0);
-		}
-		if (GravHand[client].nextPickup - clientTime > 0) return false;
-		
-		int grabbed = EntRefToEntIndex(GravHand[client].grabbedEnt);
-		//grabbing
-		if (grabbed == INVALID_ENT_REFERENCE) { //try to pick up cursorEnt
-			if (gGraviHandsGrabDistance>0.0 && TryPickupCursorEnt(client, angles)) {
-			} else if (gGraviHandsPullDistance>0.0 && TryPullCursorEnt(client, angles)) {
-			} else {
-				//if another sound already played, nothing will happen
-				PlayActionSound(client, GH_ACTION_INVALID);
-				return false;
+	if (defIndex == 5) {
+		if ((buttons & IN_ATTACK2) && !GravHand[client].forceDropProp) {
+			if (GetEntPropFloat(client, Prop_Send, "m_flNextAttack") - GetGameTime() < 0.1) {
+				SetEntPropFloat(client, Prop_Send, "m_flNextAttack", GetGameTime() + 0.5);
 			}
-		} else {
-			ThinkHeldProp(client, grabbed, buttons, angles);
+			float clientTime = GetClientTime(client);
+			if (GravHand[client].nextPickup - clientTime > 0) return false;
+			
+			int grabbed = EntRefToEntIndex(GravHand[client].grabbedEnt);
+			//grabbing
+			if (grabbed == INVALID_ENT_REFERENCE) { //try to pick up cursorEnt
+				if (gGraviHandsGrabDistance>0.0 && TryPickupCursorEnt(client, angles)) {
+				} else if (gGraviHandsPullDistance>0.0 && TryPullCursorEnt(client, angles)) {
+				} else {
+					//if another sound already played, nothing will happen
+					PlayActionSound(client, GH_ACTION_INVALID);
+					return false;
+				}
+			} else {
+				ThinkHeldProp(client, grabbed, buttons, angles);
+			}
+			return true;
+		} else if (!(buttons & IN_ATTACK2)) {
+			SetEntPropFloat(client, Prop_Send, "m_flFirstPrimaryAttack", 0.0);
+			SetEntPropFloat(client, Prop_Send, "m_flNextAttack", 0.0);
+			buttons &=~ IN_ATTACK2;
 		}
-		return true;
-	} else { //drop anything held
-		return ForceDropItem(client, buttons & IN_ATTACK && GravHand[client].forceDropProp, velocity, angles);
 	}
+	//drop anything held
+	return ForceDropItem(client, buttons & IN_ATTACK && GravHand[client].forceDropProp, velocity, angles);
 }
 
 #define PickupFlag_MotionDisabled 0x01

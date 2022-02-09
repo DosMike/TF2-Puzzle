@@ -98,8 +98,8 @@ void AttachOutputHooks() {
 	for (int at; at<listEntityOutput.Length; at++) {
 		listEntityOutput.GetArray(at, entityInfo);
 		int edict = Edict_FindByHammerId(entityInfo.hammerId);
-		listEntityOutput.Set(at, EntIndexToEntRef(edict), EntityInfo::entRef);
 		if (!IsValidEntity(edict)) continue;
+		listEntityOutput.Set(at, EntIndexToEntRef(edict), EntityInfo::entRef);
 		int out = entityInfo.startIndex;
 		int last = out + entityInfo.numOutputs;
 		hookedOutputs.Clear();

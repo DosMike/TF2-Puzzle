@@ -33,9 +33,9 @@ int EquipPlayerMelee(int client, int definitionIndex) {
 	TF2Items_SetItemIndex(weapon, definitionIndex);
 	TF2Items_SetClassname(weapon, class);
 	
+	TF2_RemoveWeaponSlot(client, TFWeaponSlot_Melee);
 	int entity = TF2Items_GiveNamedItem(client, weapon);
 	delete weapon;
-	TF2_RemoveWeaponSlot(client, TFWeaponSlot_Melee);
 	if (entity != INVALID_ENT_REFERENCE) {
 		SetEntProp(entity, Prop_Send, "m_bValidatedAttachedEntity", 1);
 		SetEntProp(entity, Prop_Send, "m_iAccountID", GetSteamAccountID(client));
@@ -57,9 +57,16 @@ bool HolsterMelee(int client) {
 		? INVALID_ITEM_DEFINITION
 		: GetEntProp(melee, Prop_Send, "m_iItemDefinitionIndex");
 	if (holsterIndex == 5) return false; //this is heavy with stock fists, can't holster
-	if (!NotifyWeaponHolster(client, holsterIndex)) return false; //was cancelled
 	
+	if ((GetClientButtons(client) & (IN_ATTACK|IN_ATTACK2))!=0) {
+		//holstering while healing someone breaks the medic beam (infinite heal)
+		PrintToChat(client, "[SM] You can not holster while holding attack buttons!");
+		return false;
+	}
+	
+	if (!NotifyWeaponHolster(client, holsterIndex)) return false; //was cancelled
 	int fists = EquipPlayerMelee(client, 5);
+	if (fists == INVALID_ENT_REFERENCE) return false; //giving fists failed?
 	if (switchTo) Client_SetActiveWeapon(client, fists);
 	if (holsterIndex != INVALID_ITEM_DEFINITION)
 		player[client].holsteredWeapon = holsterIndex;
@@ -79,8 +86,15 @@ void ActualUnholsterMelee(int client) {
 		return; //not for bots
 	if (player[client].holsteredWeapon == INVALID_ITEM_DEFINITION)
 		return; //no weapon holstered
+	
+	if ((GetClientButtons(client) & (IN_ATTACK|IN_ATTACK2))!=0) {
+		//for symmetry reasons
+		PrintToChat(client, "[SM] You can not unholster while holding attack buttons!");
+		return;
+	}
 	if (!NotifyWeaponUnholster(client, player[client].holsteredWeapon))
 		return; //was cancelled
+	
 	int restore = player[client].holsteredWeapon;
 	player[client].holsteredWeapon = INVALID_ITEM_DEFINITION;
 	if (restore != INVALID_ITEM_DEFINITION)

@@ -79,6 +79,7 @@ enum struct PlayerData {
 	int holsteredWeapon;
 	int disabledInputs;
 	bool disableAirJump; //parachute, doublejumps, ...
+	int previousButtons;
 	
 	void Reset() {
 		this.timeSpawned     = 0.0;
@@ -86,6 +87,7 @@ enum struct PlayerData {
 		this.holsteredWeapon = INVALID_ITEM_DEFINITION;
 		this.disabledInputs  = 0;
 		this.disableAirJump  = false;
+		this.previousButtons  = 0;
 	}
 }
 PlayerData player[MAXPLAYERS+1];
@@ -118,7 +120,6 @@ public void OnPluginStart() {
 	
 	RegConsoleCmd("sm_hands", Command_Holster, "Put away weapons");
 	RegConsoleCmd("sm_holster", Command_Holster, "Put away weapons");
-	AddCommandListener(OnCommandSlot0, "slot0");
 	
 	HookEvent("player_death", OnClientDeathPost);
 	HookEvent("teamplay_round_start", OnMapEntitiesRefreshed);
@@ -189,7 +190,7 @@ public void OnPluginEnd() {
 	for (int client=1;client<=MaxClients;client++) {
 		if (!IsValidClient(client)) continue;
 		ForceDropItem(client);
-		DropHolsteredMelee(client);
+		DropHolsteredMelee(client); //unholstering is not possible, requires 1 tick delay
 	}
 }
 
@@ -247,15 +248,26 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		changed = true;
 	}
 	
-	float velocity[3];
-	Entity_GetAbsVelocity(client, velocity);
-	if (clientCmdHoldProp(client, buttons, velocity, angles)) {
-		buttons &=~ IN_ATTACK2;
-		changed = true;
+	int entity;
+	if ((buttons & IN_ATTACK3) && !(player[client].previousButtons & IN_ATTACK3) && (entity=Client_GetActiveWeapon(client))!=INVALID_ENT_REFERENCE && Client_GetWeaponBySlot(client, TFWeaponSlot_Melee)==entity) {
+		//pressed down on mouse3 while ative weapon == melee (and there is a melee)
+		// -> use this to /holster
+		if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
+		else HolsterMelee(client);
+	} else {
+		float velocity[3];
+		Entity_GetAbsVelocity(client, velocity);
+		clientCmdHoldProp(client, buttons, velocity, angles);
 	}
 	
 	return changed?Plugin_Changed:Plugin_Continue;
 }
+public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2]) {
+	if (!IsValidClient(client)) return;
+	
+	player[client].previousButtons = buttons;
+}
+
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
 	if (FixPhysPropAttacker(victim, attacker, inflictor)) {
@@ -305,14 +317,6 @@ bool IsValidClient(int client, bool allowBots=true) {
 
 public Action Command_Holster(int client, int args) {
 	if (!IsValidClient(client,false)) return Plugin_Handled;
-	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
-	else HolsterMelee(client);
-	return Plugin_Handled;
-}
-
-public Action OnCommandSlot0(int client, const char[] command, int argc) {
-	if (!IsValidClient(client,false)) return Plugin_Continue;
-	if (GetClientMenu(client)!=MenuSource_None) return Plugin_Continue;
 	if (player[client].holsteredWeapon!=INVALID_ITEM_DEFINITION) UnholsterMelee(client);
 	else HolsterMelee(client);
 	return Plugin_Handled;
