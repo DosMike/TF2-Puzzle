@@ -23,6 +23,19 @@ It tries to fire apropriate physgun related outputs and to honor frozen and moti
 
 Left-clicking while holding a prop will punt it, otherwise left-click is just a normal melee punch.
 
+## Config
+
+The config is auto created in the usual spot int `cfg/sourcemod/plugin.tf2puzzle.cfg` with the following values:
+```
+tf2puzzle_gravihands_maxmass 250.0 - Max weight, the hands can pick up
+tf2puzzle_gravihands_throwforce 1000.0 - Multiplier used when throwing props
+tf2puzzle_gravihands_dropdistance 200.0 - Props get dropped when they move more than this distance from the grab point
+tf2puzzle_gravihands_grabdistance 120.0 - Maximum distance to grab stuff from, 0 to disable
+tf2puzzle_gravihands_pulldistance 850.0 - Maximum distance to pull props from, 0 to disable
+tf2puzzle_gravihands_pullforce_far 400.0 - Pull force to apply per tick when at max pull distance
+tf2puzzle_gravihands_pullforce_near 1000.0 - Theoretic pull force to apply per tick when at the player
+```
+
 ## Custom map logic
 
 The second big part is custom map logic for puzzle maps (with `_puzzle_` in their name). This is required
@@ -95,6 +108,8 @@ Check the [include file](https://github.com/DosMike/TF2-Puzzle/blob/master/tf2pu
 
 ## Dependencies
 
+* [SMLib](https://github.com/bcserv/smlib/tree/transitional_syntax) (Compile)
+* [MoreColors](https://raw.githubusercontent.com/DoctorMcKay/sourcemod-plugins/master/scripting/include/morecolors.inc) (Compile)
 * [VPhysics](https://forums.alliedmods.net/showthread.php?t=136350?t=136350)
 * [TF2Items](https://forums.alliedmods.net/showthread.php?p=1050170?p=1050170)
 * [TF2 Attributes](https://github.com/nosoop/tf2attributes)
@@ -102,3 +117,4 @@ Check the [include file](https://github.com/DosMike/TF2-Puzzle/blob/master/tf2pu
   * [TF Econ Data](https://github.com/nosoop/SM-TFEconData) (Not YET recommended, compat layer is a bit broken as of writing)
   * [TF2 ItemDB](https://forums.alliedmods.net/showthread.php?t=255885)
 * [Source Vehicles](https://github.com/Mikusch/source-vehicles) (Optional)
+* [PvP OptIn](https://github.com/DosMike/TF2-PvP-OptIn) (Optional/Supported)
