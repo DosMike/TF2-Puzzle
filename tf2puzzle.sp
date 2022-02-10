@@ -39,7 +39,7 @@
 //we require more heap in order to be able to parse the bsp lump. value is not yet optimized
 #pragma dynamic 0x200000
 
-#define PLUGIN_VERSION "22w05e"
+#define PLUGIN_VERSION "22w06a"
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
@@ -89,7 +89,7 @@ enum struct PlayerData {
 		this.holsteredWeapon = INVALID_ITEM_DEFINITION;
 		this.disabledInputs  = 0;
 		this.disableAirJump  = false;
-		this.previousButtons  = 0;
+		this.previousButtons = 0;
 	}
 }
 PlayerData player[MAXPLAYERS+1];
