@@ -7,8 +7,12 @@ dependency raw https://raw.githubusercontent.com/DoctorMcKay/sourcemod-plugins/m
 
 dependency limetech tf2items latest
 dependency limetech vphysics latest
-dependency github nosoop/SM-TFUtils latest
 dependency github nosoop/tf2attributes latest
 dependency github nosoop/SM-TFEconData latest
+# fallback econ plugin:
+dependency github flaminsarge/tf2idb master-SNAPSHOT
+# optional:
+dependency github Mikusch/source-vehicles latest
+dependency github DosMike/TF2-PvP-OptIn latest
 
 spcomp tf2puzzle.sp

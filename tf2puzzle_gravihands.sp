@@ -341,7 +341,6 @@ static void ThinkHeldProp(int client, int grabbed, int buttons, float yawAngle[3
 		if (!movementCollides(client, endpos, GravHand[client].dontCheckStartPost)) {
 			if (buttons & IN_ATTACK && !GravHand[client].blockPunt) { //punt
 				GravHand[client].forceDropProp = true;
-				GravHand[client].nextPickup = GetClientTime(client) + 2.0;
 			} else {
 				GravHand[client].lastValid = endpos;
 				GravHand[client].previousEnd = endpos;
@@ -386,6 +385,7 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		Entity_SetCollisionGroup(entity, GravHand[client].collisionFlags);
 		GravHand[client].grabbedEnt = INVALID_ENT_REFERENCE;
 		NotifyGraviHandsDropped(client, entity, didPunt);
+		GravHand[client].nextPickup = GetClientTime(client) + (punt?0.5:0.1);
 		//play sound
 		PlayActionSound(client,didPunt?GH_ACTION_THROW:GH_ACTION_DROP);
 		didStuff = true;
@@ -443,17 +443,26 @@ bool FixPhysPropAttacker(int victim, int& attacker, int& inflictor) {
 		char classname[64];
 		Entity_GetClassName(attacker, classname, sizeof(classname));
 		if (StrEqual(classname, "func_physbox") || StrContains(classname, "prop_physics")==0) {
+			//victim is damaged by physics object, search thrower in our data
 			float time;
-			int thrower;
+			int thrower=-1;
 			for (int c=1;c<=MaxClients;c++) {
 				if (IsValidClient(c) && EntRefToEntIndex(GravHand[c].lastInteractedEnt) == attacker && GravHand[c].lastInteractedTime > time) {
 					thrower = c;
 					time = GravHand[c].lastInteractedTime;
 				}
 			}
-			if (GetGameTime()-time < 7.0) { //timeout interactions
+			if (thrower > 0 && GetGameTime()-time < 7.0) { //we got a thrower, but timeout interactions
+				//rewrite attacker
 				attacker = thrower;
-				return attacker == victim; //signal to supress damage
+				//no self damage (a but too easy to do)
+				bool blockDamage = attacker == victim;
+				//pvp plugin integration
+				if (depOptInPvP && !pvp_CanAttack(attacker, victim)) {
+					blockDamage = true;
+				}
+				
+				return blockDamage;
 			}
 		}
 	}

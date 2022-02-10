@@ -29,7 +29,9 @@
 #include <vehicles>
 // we primarily compile with tf2 econ data, but can optionally fall back to tf2idb
 #include <tf_econ_data>
-#tryinclude <tf2idb>
+#include <tf2idb>
+//currently only supporting opt in pvp, dunno how firendly plugins handle this
+#include <pvpoptin>
 #define REQUIRE_PLUGIN
 
 #pragma newdecls required
@@ -94,6 +96,7 @@ PlayerData player[MAXPLAYERS+1];
 bool depVehicles;
 bool depTFEconData;
 bool depTF2IDB;
+bool depOptInPvP;
 
 static ConVar cvarGraviHandsMaxWeight;
 float gGraviHandsMaxWeight;
@@ -139,6 +142,7 @@ public void OnPluginStart() {
 
 public void OnAllPluginsLoaded() {
 	depVehicles = LibraryExists("vehicles");
+	depOptInPvP = LibraryExists("pvpoptin");
 	depTFEconData = LibraryExists("tf_econ_data");
 	depTF2IDB = LibraryExists("tf2idb");
 	if (!depTFEconData && !depTF2IDB) {
@@ -148,15 +152,17 @@ public void OnAllPluginsLoaded() {
 public void OnLibraryAdded(const char[] name) {
 	bool econ, hadEcon = depTFEconData||depTF2IDB;
 	if (StrEqual(name, "vehicles")) depVehicles = true;
+	else if (StrEqual(name, "pvpoptin")) { depOptInPvP = true; }
 	else if (StrEqual(name, "tf_econ_data")) { econ = true; depTFEconData = true; }
 	else if (StrEqual(name, "tf2idb")) { econ = true; depTF2IDB = true; }
 	if (econ && !hadEcon) {
-		PrintToServer("[TF2Puzzle] Item plugin was detected again!");
+		PrintToServer("[TF2Puzzle] Item plugin was detected: %s!", name);
 	}
 }
 public void OnLibraryRemoved(const char[] name) {
 	bool econ;
 	if (StrEqual(name, "vehicles")) depVehicles = false;
+	else if (StrEqual(name, "pvpoptin")) { depOptInPvP = false; }
 	else if (StrEqual(name, "tf_econ_data")) { econ = true; depTFEconData = false; }
 	else if (StrEqual(name, "tf2idb")) { econ = true; depTF2IDB = false; }
 	if (econ && !depTFEconData && !depTF2IDB) {
@@ -271,8 +277,8 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
 	if (FixPhysPropAttacker(victim, attacker, inflictor)) {
-		//player was hit by a prop and we fixed the attacker
-		return Plugin_Changed;
+		//player was hit by a prop and we fixed the attacker, but we shall suppress prop damage
+		return Plugin_Handled;
 	}
 	if (IsValidClient(attacker) && victim != attacker) {
 		if (weapon != INVALID_ENT_REFERENCE && GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex")==5 && player[attacker].holsteredWeapon!=INVALID_ITEM_DEFINITION) {
