@@ -73,6 +73,7 @@ the player will be able to control normally again.
 Possible values are:
 * *ATTACK* - Usually mouse 1
 * *JUMP* - Usually space
+* *AIRJUMP* - A bit hacky, but blocks jump inputs in midair
 * *DUCK* - Crouching, usually ctrl
 * *FORWARD* - Usually w
 * *BACK* - Usually s
