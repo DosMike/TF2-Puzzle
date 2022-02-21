@@ -367,7 +367,7 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		pew(client, vec, gGraviHandsDropDistance);
 		if (punt && !IsNullVector(dvangles)) { //punt
 			GetAngleVectors(dvangles, vec, NULL_VECTOR, NULL_VECTOR);
-			ScaleVector(vec, gGraviHandsPuntForce*100.0/Phys_GetMass(entity));
+			ScaleVector(vec, gGraviHandsPuntForce);
 //				AddVectors(vec, fwd, vec);
 			didPunt=true;
 		} else if (!movementCollides(client, vec, false)) { //throw with swing
@@ -377,7 +377,9 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 			ScaleVector(vec, 0.0); //set 0
 		}
 		if (!IsNullVector(dvelocity)) AddVectors(vec, dvelocity, vec);
-		TeleportEntity(entity, origin, NULL_VECTOR, vec);
+		float zeros[3];
+		TeleportEntity(entity, origin, NULL_VECTOR, zeros); //rest entity
+		Phys_AddVelocity(entity, vec, zeros);//use vphysics to accelerate, is more stable
 		
 		//fire output that the ent was dropped
 		FireEntityOutput(entity, punt?"OnPhysGunPunt":"OnPhysGunDrop", client);
@@ -438,7 +440,7 @@ static void killEntity(int entity) {
 		AcceptEntityInput(entity, "Kill");
 }
 
-bool FixPhysPropAttacker(int victim, int& attacker, int& inflictor) {
+bool FixPhysPropAttacker(int victim, int& attacker, int& inflictor, int& damagetype) {
 	if (attacker == inflictor && victim != attacker && !IsValidClient(attacker)) {
 		char classname[64];
 		Entity_GetClassName(attacker, classname, sizeof(classname));
@@ -457,6 +459,8 @@ bool FixPhysPropAttacker(int victim, int& attacker, int& inflictor) {
 				attacker = thrower;
 				//no self damage (a but too easy to do)
 				bool blockDamage = attacker == victim;
+				//I know that this is not the inteded use, but TF2 has no other use either
+				damagetype |= DMG_PHYSGUN;
 				//pvp plugin integration
 				if (depOptInPvP && !pvp_CanAttack(attacker, victim)) {
 					blockDamage = true;

@@ -3,8 +3,8 @@
 #endif
 #define _tf2_puzzle
 
-#define PUZZLE_VERSION "22w06a"
-#define PUZZLE_BUILD 220601
+#define PUZZLE_VERSION "22w08a"
+#define PUZZLE_BUILD 220801
 
 /**
  * There are two flags that might not be immediately obvious:
@@ -89,7 +89,7 @@ forward Action OnClientUnholsterWeapon(int client, int itemDefinition);
  * 
  * @param client - the client that was unholstering
  * @param itemDefinition - the item definition index that was stored in the holster
- * @param dropped - whether the weapon was actually restored
+ * @param dropped - true if the weapon was stripped, false if actually restored
  */
 forward void OnClientUnholsterWeaponPost(int client, int itemDefinition, bool dropped);
 
@@ -129,7 +129,7 @@ forward void OnClientGraviHandsGrabPost(int client, int entity);
  * @param entity - the entity picked up by the client
  * @param punted - if punting this prop is possible and it was thrown
  */
-forward void OnClientGraviHandsGrabPost(int client, int entity, bool punted);
+forward void OnClientGraviHandsDropped(int client, int entity, bool punted);
 
 /**
  * Receive the entity this client is holding if any

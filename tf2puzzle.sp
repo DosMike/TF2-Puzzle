@@ -39,7 +39,8 @@
 //we require more heap in order to be able to parse the bsp lump. value is not yet optimized
 #pragma dynamic 0x200000
 
-#define PLUGIN_VERSION "22w06a"
+#define PLUGIN_VERSION "22w08a"
+//#define PLUGIN_DEBUG
 
 public Plugin myinfo = {
 	name = "[TF2] Puzzle",
@@ -72,13 +73,25 @@ public Plugin myinfo = {
 // will nuke warpaints, attachments, decals from objectors, etc and probably 
 // remove all custom attributes, but this is the easiest way
 
+#if defined PLUGIN_DEBUG
+ #define PLDBG(%1) %1
+#else
+ #define PLDBG(%1) {}
+#endif
+
 #define INVALID_ITEM_DEFINITION -1
 
 bool bPuzzleMap;
 enum struct PlayerData {
 	float timeSpawned;
 	bool handledDeath;
+	
 	int holsteredWeapon;
+	int holsteredMeta[2];
+	int holsteredAttributeCount;
+	int holsteredAttributeIds[16];
+	any holsteredAttributeValues[16];
+	
 	int disabledInputs;
 	bool disableAirJump; //parachute, doublejumps, ...
 	int previousButtons;
@@ -86,7 +99,10 @@ enum struct PlayerData {
 	void Reset() {
 		this.timeSpawned     = 0.0;
 		this.handledDeath    = false;
+		
 		this.holsteredWeapon = INVALID_ITEM_DEFINITION;
+		//other holstered data go with this one
+		
 		this.disabledInputs  = 0;
 		this.disableAirJump  = false;
 		this.previousButtons = 0;
@@ -266,20 +282,29 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		clientCmdHoldProp(client, buttons, velocity, angles);
 	}
 	
+	if (TF2_GetPlayerClass(client)==TFClass_DemoMan && (buttons&IN_ATTACK2) && (weapon=Client_GetActiveWeapon(client))!=INVALID_ENT_REFERENCE && GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex")==5) {
+		//don't charge while using hands
+		buttons &=~ IN_ATTACK2;
+	}
+	
 	return changed?Plugin_Changed:Plugin_Continue;
 }
 public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2]) {
-	if (!IsValidClient(client)) return;
-	
+	if (!IsValidClient(client)) return;	
 	player[client].previousButtons = buttons;
 }
 
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom) {
-	if (FixPhysPropAttacker(victim, attacker, inflictor)) {
-		//player was hit by a prop and we fixed the attacker, but we shall suppress prop damage
-		return Plugin_Handled;
+	//player was hit by a prop and we fixed the attacker, but we shall suppress prop damage
+	if (FixPhysPropAttacker(victim, attacker, inflictor, damagetype)) {
+		ScaleVector(damageForce, 0.0);
+		damagetype |= DMG_PREVENT_PHYSICS_FORCE;
+		damage = 0.0;
+		PrintToServer("Zeroing stuffs");
+		return Plugin_Changed;
 	}
+	
 	if (IsValidClient(attacker) && victim != attacker) {
 		if (weapon != INVALID_ENT_REFERENCE && GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex")==5 && player[attacker].holsteredWeapon!=INVALID_ITEM_DEFINITION) {
 			//this player is currently using fists, don't damage

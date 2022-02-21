@@ -75,6 +75,7 @@ bool ScanOutputs(char[] mapEntities) {
 				outputInfo.delay = StringToFloat(splitParameters[3]);
 				outputInfo.once = StringToInt(splitParameters[4]) > 0;
 				
+				PLDBG( PrintToServer("[TF2Puzzle] Parsing hid %i: %s %s %s in %fs r%i", entityInfo.hammerId, output, splitParameters[0], splitParameters[2], outputInfo.delay, outputInfo.once); )
 				listOutputs.PushArray(outputInfo);
 				entityInfo.numOutputs++;
 			}
@@ -97,8 +98,11 @@ void AttachOutputHooks() {
 	ArrayList hookedOutputs = new ArrayList(ByteCountToCells(128));
 	for (int at; at<listEntityOutput.Length; at++) {
 		listEntityOutput.GetArray(at, entityInfo);
-		int edict = Edict_FindByHammerId(entityInfo.hammerId);
-		if (!IsValidEntity(edict)) continue;
+		int edict = Entity_FindByHammerId(entityInfo.hammerId);
+		if (!IsValidEntity(edict)) {
+			PLDBG( PrintToServer("[TF2Puzzle] Unable to hook entity by hammerId %i (%i)", entityInfo.hammerId, edict); )
+			continue;
+		}
 		listEntityOutput.Set(at, EntIndexToEntRef(edict), EntityInfo::entRef);
 		int out = entityInfo.startIndex;
 		int last = out + entityInfo.numOutputs;
@@ -107,18 +111,21 @@ void AttachOutputHooks() {
 			listOutputs.GetArray(out, outputInfo);
 			if (hookedOutputs.FindString(outputInfo.output)==-1) {
 				hookedOutputs.PushString(outputInfo.output);
-//				PrintToServer("[TF2Puzzle] Hooked %s on hammerId %d / ent %d", outputInfo.output, entityInfo.hammerId, entityInfo.entRef);
+				PLDBG( PrintToServer("[TF2Puzzle] Hooked %s on hammerId %d / ent %d", outputInfo.output, entityInfo.hammerId, entityInfo.entRef); )
 				HookSingleEntityOutput(edict, outputInfo.output, EntityOutputHandler);
 			}
 		}
 	}
+	delete hookedOutputs;
 }
 
 public void EntityOutputHandler(const char[] output, int caller, int activator, float delay) {
 	//caller is the entity generating the output
 	//the passed delay is poopoo
+	caller = SafeEntRefToEntIndex(caller); //no, this is not always the index. I've seen ent refs come in
+	activator = SafeEntRefToEntIndex(activator); //for the activator it's more a precaution
 	
-//	PrintToServer("[TF2Puzzle] Triggered output %s on hammerId %i by %i", output, Entity_GetHammerId(caller), activator);
+	PLDBG( PrintToServer("[TF2Puzzle] Triggered output %s on hammerId %i by %i", output, Entity_GetHammerId(caller), activator); )
 	int at = listEntityOutput.FindValue(EntIndexToEntRef(caller), EntityInfo::entRef);
 	if (at < 0) return;
 	EntityInfo entityInfo;
@@ -246,14 +253,14 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 		if (IsValidEntity(target)) {
 			char buffer[4];
 			if (!depVehicles) {
-				PrintToServer("[TF2Puzzle] Map Error: CreateVehicle output fired without Mikusch/source-vehicles");
+				PrintMapError(action, caller, activator, "CreateVehicle output fired without Mikusch/source-vehicles");
 			} else if (GetVehicleName(action[14], buffer, sizeof(buffer))) { //check vehicle exists
 				float origin[3], angles[3];
 				Entity_GetAbsOrigin(target, origin);
 				Entity_GetAbsAngles(target, angles);
 				Vehicle.Create(action[14], origin, angles);
 			} else {
-				PrintToServer("[TF2Puzzle] Map Error: Tried to create vehicle with unknown id '%s'");
+				PrintMapError(action, caller, activator, "Tried to create vehicle with unknown id '%s'", buffer);
 			}
 		}
 	} else if (StrEqual(argument, "disableinputs", false)) {
@@ -278,7 +285,7 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 					player[target].disableAirJump = true;
 					player[target].disabledInputs |= (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
 				}
-				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
+				else PrintMapError(action, caller, activator, "Unknown Input Name '%s'", argument);
 			}
 		}
 	} else if (StrEqual(argument, "enableinputs", false)) {
@@ -303,10 +310,79 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 					player[target].disableAirJump = false;
 					player[target].disabledInputs &=~ (IN_ATTACK|IN_JUMP|IN_DUCK|IN_FORWARD|IN_BACK|IN_USE|IN_MOVELEFT|IN_MOVERIGHT|IN_ATTACK2|IN_RELOAD|IN_SCORE|IN_ATTACK3);
 				}
-				else PrintToServer("[TF2Puzzle] Map Error: Unknown Input Name '%s' spcified on Output '%s' from hammerId %i, triggered by %i", argument, action, Entity_GetHammerId(caller), activator);
+				else PrintMapError(action, caller, activator, "Unknown Input Name '%s'", argument);
 			}
 		}
+	} else if (StrEqual(argument, "retarget", false)) {
+		if (IsValidEntity(target)) {
+			//get the targetname we should set to
+			if (nextArg <= 0) {
+				PrintMapError(action, caller, activator, "Retarget not specifying any targetname");
+			}
+			nextArg = BreakString(action[nextArg], argument, sizeof(argument));
+			int newTarget = Entity_FindByName(argument);
+			if (newTarget == INVALID_ENT_REFERENCE) {
+				PrintMapError(action, caller, activator, "Could not find entity to retarget: %s = %i", argument, newTarget);
+				return; //no entity found
+			}
+			
+			char targetClass[64];
+			Entity_GetClassName(target, targetClass, sizeof(targetClass));
+			if (StrEqual(targetClass, "ambient_generic")) {
+				// m_sSourceEntName +0x4e4 is the targetname from which the entity is searched
+				// m_hSoundSource +0x4e8 is the EHANDLE for the target entity
+				// m_nSoundSourceEntIndex +0x4ec is the intity index (i guess for speed?)
+				// at some point those members were fields, but that's no more
+				// and these values are only recalculated in the entities Activate
+				// iif no m_hSoundSource was set before (so on map/game load)
+				// to avoid having to recreate the entity, let's hack those values
+				// to a value we find by the specified output targetname
+				//int local;
+				//int stringProp = FindSendPropInfo("ambient_generic", "m_sSourceEntName");
+				//PrintToServer("Reported m_sSourceEntName at +0x%03X", stringProp);
+				int oehptr = GetEntData(target, 0x4E8);
+				int oeh= GetEntDataEnt2(target, 0x4E8);
+				int oei= GetEntData(target, 0x4EC);
+				PrintMapError(action, caller, activator, "Updating target on %i from %i(*%i)/%i to %i", target, oeh, oehptr, oei, newTarget);
+				SetEntDataEnt2(target, 0x4E8, newTarget, true);
+				SetEntData(target, 0x4EC, newTarget, _, true);
+			} else PrintMapError(action, caller, activator, "Target entity class '%s' (%i) not supported", targetClass, target);
+		}
 	} else {
-		PrintToServer("[TF2Puzzle] Map Error: Unknown TF2Puzzle Output '%s' from hammerId %i, triggered by %i", action, Entity_GetHammerId(caller), activator);
+		PrintMapError(action, caller, activator, "Unknown Output");
 	}
+}
+
+void PrintMapError(const char[] action, int caller, int activator, const char[] message, any...) {
+	char buf1[24], buf2[24], messageformat[512];
+	if (caller == INVALID_ENT_REFERENCE){
+		buf1 = "?unknown";
+	} else if (IsValidEntity(caller) && HasEntProp(caller, Prop_Send, "m_iHammerID")) {
+		Format(buf1,sizeof(buf1),"hammerId %i", caller);
+	} else {
+		Format(buf1,sizeof(buf1),"entIndex %i", caller);
+	}
+	if (activator == INVALID_ENT_REFERENCE){
+		buf2 = "?unknown";
+	} else if (IsValidEntity(activator) && HasEntProp(activator, Prop_Send, "m_iHammerID")) {
+		Format(buf2,sizeof(buf2),"hammerId %i", activator);
+	} else {
+		Format(buf2,sizeof(buf2),"entIndex %i", activator);
+	}
+	
+	VFormat(messageformat, sizeof(messageformat), message, 5);
+	PrintToServer("[TF2Puzzle] Map Error: %s {Output '%s' from %s by %s}", messageformat, action, buf1, buf2);
+}
+
+//this abuses engine internals, but works
+// if the passed value is already a ref, returns the ref
+// otherwise gets the ref from the ent index
+//static int SafeEntIndexToEntRef(int index) {
+//	return index < 0 ? index : EntIndexToEntRef(index);
+//}
+//this abuses engine internals, but works
+// if the passed value is already an index, returns the index
+// otherwise gets the index from the ent ref
+static int SafeEntRefToEntIndex(int ref) {
+	return ref >= 0 ? ref : EntRefToEntIndex(ref);
 }

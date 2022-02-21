@@ -7,29 +7,38 @@
  #error Please compile the main file!
 #endif
 
-int EquipPlayerMelee(int client, int definitionIndex) {
+//on the invalid default values:
+// some stuff uses negative levels (like the physgun) as it shows positive but can mark custom weapons
+// quality afaik is always positive
+int EquipPlayerMelee(int client, int definitionIndex, int level=9000, int quality=-1, int attribCount=0, int customAttribIds[]={}, any customAttribVals[]={}) {
 	if (!TF2EI_IsValidItemDefinition(definitionIndex))
 		ThrowError("Definition index %d is invalid", definitionIndex);
 	
 	char class[72];
-	int minlvl, maxlvl, quality;
+	int maxlvl;
 	
 	if (TF2EI_GetDefaultWeaponSlot(definitionIndex)!=TFWeaponSlot_Melee)
 		ThrowError("Weapon %d (%s) uses non-melee slot!", definitionIndex, class);
 	
 	TF2EI_GetItemClassName(definitionIndex, class, sizeof(class));
-	TF2EI_GetItemLevelRange(definitionIndex, minlvl, maxlvl);
-	quality = TF2EI_GetItemQuality(definitionIndex);
+	if (level > 255) TF2EI_GetItemLevelRange(definitionIndex, level, maxlvl);
+	if (quality < 0) quality = TF2EI_GetItemQuality(definitionIndex);
 	
 	if (StrEqual(class, "saxxy") && !TF2EI_AdjustWeaponClassname(class, sizeof(class), TF2_GetPlayerClass(client)))
 		ThrowError("Could not translate saxxy (%d) for player class %d", definitionIndex, TF2_GetPlayerClass(client));
 	if (StrContains(class, "tf_weapon_")!=0 && !StrEqual(class, "saxxy"))
 		ThrowError("Definition index %d (%s) is not a weapon", definitionIndex, class);
 	
-	Handle weapon = TF2Items_CreateItem(FORCE_GENERATION|PRESERVE_ATTRIBUTES);
-	TF2Items_SetLevel(weapon, minlvl);
+	int flags = FORCE_GENERATION|OVERRIDE_ITEM_DEF|OVERRIDE_ITEM_LEVEL|OVERRIDE_ITEM_QUALITY;
+	if (attribCount>0) flags|=OVERRIDE_ATTRIBUTES;
+	else flags|=PRESERVE_ATTRIBUTES;
+	Handle weapon = TF2Items_CreateItem(flags);
+	TF2Items_SetLevel(weapon, level);
 	TF2Items_SetQuality(weapon, quality);
-	TF2Items_SetNumAttributes(weapon, 0);
+	TF2Items_SetNumAttributes(weapon, attribCount);
+	for (int a; a<attribCount; a++) {
+		TF2Items_SetAttribute(weapon, a, customAttribIds[a], customAttribVals[a]);
+	}
 	TF2Items_SetItemIndex(weapon, definitionIndex);
 	TF2Items_SetClassname(weapon, class);
 	
@@ -65,11 +74,23 @@ bool HolsterMelee(int client) {
 	}
 	
 	if (!NotifyWeaponHolster(client, holsterIndex)) return false; //was cancelled
+	//copy melee into holster
+	if (holsterIndex != INVALID_ITEM_DEFINITION) {
+		player[client].holsteredWeapon = holsterIndex;
+		player[client].holsteredMeta[0] = GetEntProp(melee, Prop_Send, "m_iEntityLevel");
+		player[client].holsteredMeta[1] = GetEntProp(melee, Prop_Send, "m_iEntityQuality");
+		//collect attributes. while up to 20 are supported here, we seem to only be able to restore 16 with tf2items
+		int attribCount = TF2Attrib_ListDefIndices(melee, player[client].holsteredAttributeIds, sizeof(PlayerData::holsteredAttributeIds));
+		if (attribCount > sizeof(PlayerData::holsteredAttributeIds))
+			attribCount = sizeof(PlayerData::holsteredAttributeIds);
+		for (int a; a<attribCount; a++)
+			player[client].holsteredAttributeValues[a] = TF2Attrib_GetByDefIndex(melee, player[client].holsteredAttributeValues[a]);
+		player[client].holsteredAttributeCount = attribCount;
+	}
+	//equip new melee
 	int fists = EquipPlayerMelee(client, 5);
 	if (fists == INVALID_ENT_REFERENCE) return false; //giving fists failed?
 	if (switchTo) Client_SetActiveWeapon(client, fists);
-	if (holsterIndex != INVALID_ITEM_DEFINITION)
-		player[client].holsteredWeapon = holsterIndex;
 		
 	NotifyWeaponHolsterPost(client, holsterIndex);
 	return true;
@@ -97,8 +118,14 @@ void ActualUnholsterMelee(int client) {
 	
 	int restore = player[client].holsteredWeapon;
 	player[client].holsteredWeapon = INVALID_ITEM_DEFINITION;
-	if (restore != INVALID_ITEM_DEFINITION)
-		EquipPlayerMelee(client, restore);
+	if (restore != INVALID_ITEM_DEFINITION) {
+		EquipPlayerMelee(client, restore, 
+			player[client].holsteredMeta[0],
+			player[client].holsteredMeta[1],
+			player[client].holsteredAttributeCount,
+			player[client].holsteredAttributeIds,
+			player[client].holsteredAttributeValues);
+	}
 	NotifyWeaponUnholsterPost(client, restore, false);
 }
 
