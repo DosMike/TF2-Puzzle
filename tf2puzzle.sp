@@ -133,6 +133,7 @@ float gGraviHandsPullForceNear;
 #include "tf2puzzle_econwrapper.sp"
 #include "tf2puzzle_weapons.sp"
 #include "tf2puzzle_gravihands.sp"
+#include "tf2puzzle_utils.sp"
 #include "tf2puzzle_mapsupport.sp"
 
 public void OnPluginStart() {
@@ -301,7 +302,6 @@ public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, floa
 		ScaleVector(damageForce, 0.0);
 		damagetype |= DMG_PREVENT_PHYSICS_FORCE;
 		damage = 0.0;
-		PrintToServer("Zeroing stuffs");
 		return Plugin_Changed;
 	}
 	
@@ -416,6 +416,7 @@ public void OnCVarGraviHandsPullForceFarChange(ConVar convar, const char[] oldVa
 public void OnCVarGraviHandsPullForceNearChange(ConVar convar, const char[] oldValue, const char[] newValue) {
 	gGraviHandsPullForceNear = convar.FloatValue;
 }
+
 
 /** natives & forwards **/
 

@@ -184,84 +184,16 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 			TF2_RegeneratePlayer(target);
 		}
 	} else if (StrEqual(argument, "resetcooldowns", false)) {
-		if (IsValidClient(target) && IsPlayerAlive(target)) {
-			SetEntPropFloat(target, Prop_Send, "m_flEnergyDrinkMeter", 100.0);
-			SetEntPropFloat(target, Prop_Send, "m_flHypeMeter", 100.0);
-			SetEntPropFloat(target, Prop_Send, "m_flChargeMeter", 100.0);
-			SetEntPropFloat(target, Prop_Send, "m_flCloakMeter", 100.0);
-			SetEntPropFloat(target, Prop_Send, "m_flStealthNextChangeTime", GetGameTime());
-//			SetEntPropFloat(target, Prop_Send, "m_flChargeLevel", 1.0);
-			SetEntPropFloat(target, Prop_Send, "m_flRageMeter", 100.0);
-			SetEntPropFloat(target, Prop_Send, "m_flNextRageEarnTime", GetGameTime());
-			SetEntPropFloat(target, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
+		if (IsValidClient(target)) {
+			TF2PZ_ResetPlayerCooldowns(target);
 		}
 	} else if (StrEqual(argument, "stripwhitelist", false)) {
-		//not using breakstring because we need all classnames collected for checking, saving string copyies this way
 		if (IsValidClient(target)) {
-			UnholsterMelee(target);
-			char whiteclass[16][64];
-			int clz=ExplodeString(action[nextArg], " ", whiteclass, sizeof(whiteclass), sizeof(whiteclass[]));
-			bool whiteslots[6];
-			bool startsWith[16];
-			int tmp;
-			for (int c;c<clz;c++) {
-				int l=strlen(whiteclass[c]);
-				if (StringToIntEx(whiteclass[c], tmp)==l) {
-					if (tmp < 1 || tmp > 5) continue;
-					whiteslots[tmp-1] = true;
-					whiteclass[c][0] = 0;
-				} else if (l>1 && whiteclass[c][l-1]=='*') {
-					whiteclass[c][l-1] = 0;
-					startsWith[c] = true;
-				}
-			}
-			int weapon;
-			char class[64];
-			int switchto=-1;
-			for (int slot;slot<6;slot++) {
-				bool keep;
-				if (whiteslots[slot]) {
-					keep = true;
-				} else {
-					weapon = Client_GetWeaponBySlot(target, slot);
-					if (weapon == INVALID_ENT_REFERENCE) continue;
-					Entity_GetClassName(weapon, class, sizeof(class));
-					for (int c;c<clz;c++) {
-						if (whiteclass[c][0]==0) continue;
-						if (startsWith[c]) {
-							keep = (StrContains(class,whiteclass[c])==0);
-						} else {
-							keep = (StrEqual(class,whiteclass[c]));
-						}
-					}
-				}
-				if (keep) {
-					if (switchto==-1) switchto=slot;
-				} else {
-					if (slot == 2) {
-						EquipPlayerMelee(target, 5);
-						if (switchto==-1) switchto=2;
-					} else TF2_RemoveWeaponSlot(target, slot);
-				}
-			}
-			if (switchto!=-1) {
-				Client_SetActiveWeapon(target, Client_GetWeaponBySlot(target, switchto));
-			}
+			TF2PZ_StripWeaponsFiltered(target, action[nextArg]);
 		}
 	} else if (StrEqual(argument, "createvehicle", false)) {
-		//not using breakstring here because we can only spawn one vehicle at a time and no copy is faster
 		if (IsValidEntity(target)) {
-			char buffer[4];
-			if (!depVehicles) {
-				PrintMapError(action, caller, activator, "CreateVehicle output fired without Mikusch/source-vehicles");
-			} else if (GetVehicleName(action[14], buffer, sizeof(buffer))) { //check vehicle exists
-				float origin[3], angles[3];
-				Entity_GetAbsOrigin(target, origin);
-				Entity_GetAbsAngles(target, angles);
-				Vehicle.Create(action[14], origin, angles);
-			} else {
-				PrintMapError(action, caller, activator, "Tried to create vehicle with unknown id '%s'", buffer);
-			}
+			TF2PZ_SpawnVehicleAt(target, action[nextArg]);
 		}
 	} else if (StrEqual(argument, "disableinputs", false)) {
 		if (IsValidClient(target)) {
@@ -319,40 +251,18 @@ void RunCustomOutput(int caller, int activator, int target, const char[] action)
 			if (nextArg <= 0) {
 				PrintMapError(action, caller, activator, "Retarget not specifying any targetname");
 			}
-			nextArg = BreakString(action[nextArg], argument, sizeof(argument));
-			int newTarget = Entity_FindByName(argument);
-			if (newTarget == INVALID_ENT_REFERENCE) {
-				PrintMapError(action, caller, activator, "Could not find entity to retarget: %s = %i", argument, newTarget);
-				return; //no entity found
+			if (!TF2PZ_RetargetEntityEx(target, action[nextArg])) {
+				char classname[64];
+				Entity_GetClassName(target, classname, sizeof(classname));
+				PrintMapError(action, caller, activator, "Target entity class '%s' (%i) not supported", classname, target);
 			}
-			
-			char targetClass[64];
-			Entity_GetClassName(target, targetClass, sizeof(targetClass));
-			if (StrEqual(targetClass, "ambient_generic")) {
-				// m_sSourceEntName +0x4e4 is the targetname from which the entity is searched
-				// m_hSoundSource +0x4e8 is the EHANDLE for the target entity
-				// m_nSoundSourceEntIndex +0x4ec is the intity index (i guess for speed?)
-				// at some point those members were fields, but that's no more
-				// and these values are only recalculated in the entities Activate
-				// iif no m_hSoundSource was set before (so on map/game load)
-				// to avoid having to recreate the entity, let's hack those values
-				// to a value we find by the specified output targetname
-				//int local;
-				//int stringProp = FindSendPropInfo("ambient_generic", "m_sSourceEntName");
-				//PrintToServer("Reported m_sSourceEntName at +0x%03X", stringProp);
-				int oehptr = GetEntData(target, 0x4E8);
-				int oeh= GetEntDataEnt2(target, 0x4E8);
-				int oei= GetEntData(target, 0x4EC);
-				PrintMapError(action, caller, activator, "Updating target on %i from %i(*%i)/%i to %i", target, oeh, oehptr, oei, newTarget);
-				SetEntDataEnt2(target, 0x4E8, newTarget, true);
-				SetEntData(target, 0x4EC, newTarget, _, true);
-			} else PrintMapError(action, caller, activator, "Target entity class '%s' (%i) not supported", targetClass, target);
 		}
 	} else {
 		PrintMapError(action, caller, activator, "Unknown Output");
 	}
 }
 
+#if defined PLUGIN_DEBUG
 void PrintMapError(const char[] action, int caller, int activator, const char[] message, any...) {
 	char buf1[24], buf2[24], messageformat[512];
 	if (caller == INVALID_ENT_REFERENCE){
@@ -373,16 +283,6 @@ void PrintMapError(const char[] action, int caller, int activator, const char[] 
 	VFormat(messageformat, sizeof(messageformat), message, 5);
 	PrintToServer("[TF2Puzzle] Map Error: %s {Output '%s' from %s by %s}", messageformat, action, buf1, buf2);
 }
-
-//this abuses engine internals, but works
-// if the passed value is already a ref, returns the ref
-// otherwise gets the ref from the ent index
-//static int SafeEntIndexToEntRef(int index) {
-//	return index < 0 ? index : EntIndexToEntRef(index);
-//}
-//this abuses engine internals, but works
-// if the passed value is already an index, returns the index
-// otherwise gets the index from the ent ref
-static int SafeEntRefToEntIndex(int ref) {
-	return ref >= 0 ? ref : EntRefToEntIndex(ref);
-}
+#else
+void PrintMapError(any...){}
+#endif

@@ -367,8 +367,9 @@ bool ForceDropItem(int client, bool punt=false, const float dvelocity[3]=NULL_VE
 		pew(client, vec, gGraviHandsDropDistance);
 		if (punt && !IsNullVector(dvangles)) { //punt
 			GetAngleVectors(dvangles, vec, NULL_VECTOR, NULL_VECTOR);
-			ScaleVector(vec, gGraviHandsPuntForce);
+			ScaleVector(vec, gGraviHandsPuntForce * 100.0 / Phys_GetMass(entity));
 //				AddVectors(vec, fwd, vec);
+//			PrintToServer("Punting Prop with Mass %f", Phys_GetMass(entity));
 			didPunt=true;
 		} else if (!movementCollides(client, vec, false)) { //throw with swing
 			SubtractVectors(vec, GravHand[client].previousEnd, vec);
